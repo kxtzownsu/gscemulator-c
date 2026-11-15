@@ -44,6 +44,7 @@ Examples belong in `examples/`. Reference material belongs in `reference/`, whic
 CLI:
 
 - `--chip` / `-c` selects a chip. Omitting it means `h1b3c`.
+- `--bootrom` / `-r` copies the BootROM path into `ctx.firmware.bootrom`. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
 - `--verbose` / `-v` enables verbose logging.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -74,7 +75,7 @@ Emulator:
 
 Context:
 
-- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, and `verbose`.
+- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, `firmware`, and `verbose`.
 - `ctx_init` zeroes the container; `main` calls it before touching anything else.
 - `ctx.verbose` is the only verbose switch. `LOG_VBS` reads it; do not add a second flag.
 - Ownership follows the field: `argcheck_destroy` frees `ctx.ac`, and a backend's `end_emulation` closes `ctx.uc` and sets it to NULL. Never destroy or close the same resource twice.
@@ -83,7 +84,7 @@ Return codes:
 
 - `common/rc.h` defines `Rc`. Every `emu_exit` call, `exit` call, and `main` return uses an `RC_*` value; never pass a raw number.
 - `RC_SUCCESS` covers a normal run and the help path.
-- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, and `RC_LOGGER_INVALID_TYPE` cover failures.
+- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_LOGGER_INVALID_TYPE`, and `RC_CHIPEMU_FAILED_BOOTROM_READ` cover failures.
 - Values are negative, so the process status is the low byte (`RC_ARG_CHIP_INVALID` reports as 254). Add a new `RC_*` value instead of reusing an unrelated one.
 
 ## Security rules
@@ -106,7 +107,7 @@ Return codes:
 - Prefer `snprintf` over `sprintf` or `strcpy`. Check truncation where the result matters.
 - Keep chip-specific logic in the chip backend. `src/common/` must not include `H1B3C` or future chip headers.
 - When an interface changes, update the header, every implementation, `main.c`, and the fuzz harness in the same change.
-- New `src/**/*.c` files are picked up automatically by the Makefile.
+- New `src/**/*.c` files are picked up automatically by the Makefile, except `src/H1B3C/firmware/`, which is target firmware and is excluded from the host build.
 
 ### Makefile
 
@@ -114,6 +115,7 @@ Return codes:
 - Keep hardening flags and format warnings. Do not disable them to make a build pass.
 - Put build products under `build/<arch>/`. `make clean` only removes the current architecture.
 - Add fuzz paths through the `FUZZ_*` variables instead of hardcoding them.
+- `SRCS` filters out `src/H1B3C/firmware/`; those files build for the emulated target, not the host. Do not add them to the host objects.
 
 ## Verification
 

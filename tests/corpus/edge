@@ -1,1 +1,1 @@
---chip= --verbose=1 -n --unknown
+--chip= --bootrom= --verbose=1 -n --unknown

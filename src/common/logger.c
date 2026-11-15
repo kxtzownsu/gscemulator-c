@@ -1,10 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include <common/ctx.h>
-#include <common/exit.h>
-#include <common/logger.h>
-#include <common/rc.h>
+#include <common/common.h>
 
 void log_internal(LogType logtype, const char *file, int line, const char *msg, ...) {
   const char *tag = "";

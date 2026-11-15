@@ -1,11 +1,9 @@
-#include <common/file.h>
-
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <common/logger.h>
+#include <common/common.h>
 
 static FileRC file_rc_from_errno(int err) {
   return (err == EACCES || err == EPERM) ? FILE_PERMISSION_DENIED : FILE_OPEN_FAILED;

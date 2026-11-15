@@ -3,7 +3,7 @@
 Chip-agnostic runtime code shared by every backend.
 
 - `emulator.h` defines the interface every chip implements. Keep it generic; do not add Haven-specific state or fields here.
-- `ctx.c` owns the global `Ctx`. Keep it a plain data container: `main` fills `ac`, `chip`, and `verbose`, the backend fills `chipemu` and `uc`. Do not add behavior or chip state here.
+- `ctx.c` owns the global `Ctx`. Keep it a plain data container: `main` fills `ac`, `chip`, `firmware`, and `verbose`, the backend fills `chipemu` and `uc`. Do not add behavior or chip state here.
 - `exit.c` owns `emu_exit`. It takes an `Rc`, calls `end_emulation` when one is set, destroys `ctx.ac`, then exits. It clears both fields first so re-entry cannot double-free. It is `_Noreturn`; add no cleanup after it.
 - `rc.h` owns `Rc`. Every program exit uses an `RC_*` value; never pass a raw number to `emu_exit` or `exit`.
 - `file.c` owns `file_readbuf` and `file_writebuf`. `buffer_size` includes the trailing NUL: reads use at most `buffer_size - 1` bytes and terminate, writes emit `buffer_size - 1` bytes. Validate every path, buffer, and size before touching the file system, return `FileRC`, and never call `emu_exit` from this layer. Treat paths as untrusted; never pass one as a format string.

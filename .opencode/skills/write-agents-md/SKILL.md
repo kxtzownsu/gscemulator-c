@@ -41,6 +41,7 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `common/ctx.h` holds the global `Ctx` and `ctx_init` zeroes it.
 - `common/rc.h` defines every exit code; no raw numbers.
 - `common/file.h` returns `FileRC`; the helpers log, never call `emu_exit`, and count the trailing NUL in `buffer_size`.
+- `ctx.firmware` paths are fixed `char[MAX_FILE_PATH]` buffers; copy CLI strings in with `snprintf` and reject truncation.
 - `initialize` must set `ctx.chipemu.ready = true` after successful setup.
 - `LOG*` messages must be compile-time literals.
 - The fuzz harness filters `--help` and `-h` because destroy exits.

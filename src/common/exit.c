@@ -1,11 +1,6 @@
-#include <common/exit.h>
-
 #include <stdlib.h>
 
-#include <libargs.h>
-#include <common/ctx.h>
-#include <common/emulator.h>
-#include <common/rc.h>
+#include <common/common.h>
 
 ARGCHECK_NORETURN void emu_exit(Rc rc) {
   void (*end_emulation)(void) = ctx.chipemu.end_emulation;

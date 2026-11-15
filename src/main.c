@@ -1,12 +1,8 @@
+#include <stdio.h>
 #include <string.h>
 
 #include <H1B3C/emulator.h>
-#include <common/ctx.h>
-#include <common/emulator.h>
-#include <common/exit.h>
-#include <common/logger.h>
-#include <common/rc.h>
-#include <libargs.h>
+#include <common/common.h>
 
 static void get_chipemu(EmulatorChips chip) {
   switch (chip) {
@@ -22,6 +18,8 @@ static void get_chipemu(EmulatorChips chip) {
 
 int main(int argc, char **argv) {
   const char *chip;
+  const char *rom_path;
+  int path_len;
 
   ctx_init();
 
@@ -31,9 +29,18 @@ int main(int argc, char **argv) {
   argcheck_set_description(ctx.ac, "gscemulator ported to C");
 
   chip = argcheck_fequals(ctx.ac, "--chip", "-c", "Chip to emulate [ h1b3c | h1c3m | h1d3c | h1d3m | npcx ]");
+  rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Must be less than FLASH_ROM_SIZE)");
   ctx.verbose = argcheck_fbool(ctx.ac, "--verbose", "-v", "Verbose output");
 
   argcheck_check_help(ctx.ac);
+
+  if (rom_path != NULL) {
+    path_len = snprintf(ctx.firmware.bootrom, sizeof(ctx.firmware.bootrom), "%s", rom_path);
+    if (path_len < 0 || (size_t)path_len >= sizeof(ctx.firmware.bootrom)) {
+      LOG_ERR("BootROM path is too long\n");
+      emu_exit(RC_ARG_PATH_TOO_LONG);
+    }
+  }
 
   /* The default chip is H1B3C. */
   if (!chip) chip = "h1b3c";

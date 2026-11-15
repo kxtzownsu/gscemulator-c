@@ -1,44 +1,22 @@
 #include <H1B3C/emulator.h>
 #include <H1B3C/memory.h>
 
+#include <string.h>
+
 #include <unicorn/unicorn.h>
 #include <inttypes.h>
 
-#include <common/ctx.h>
-#include <common/emulator.h>
-#include <common/exit.h>
-#include <common/logger.h>
-#include <common/rc.h>
+#include <common/common.h>
 
 #define PC_VTOR_OFFSET 0x4
 #define SP_VTOR_OFFSET 0x0
 
-/* This will eventually be the real H1B3C ROM. For right now this is just to make sure emulation works. */
-const uint32_t TEST_ROM[] = {
-    0x00020000,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-    0x00000041,
-
-    0x40DDF64C,
-    0x20BBF6CA,
-    0xBF00
-};
-
 void Havn_Initialize(void) {
   uc_err err;
+  FileRC frc;
+  uint8_t ROMBUF[FLASH_ROM_SIZE];
+
+  memset(ROMBUF, 0xFF, sizeof(ROMBUF));
 
   err = uc_open(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS, &ctx.uc);
   if (err != UC_ERR_OK) {
@@ -74,14 +52,21 @@ void Havn_Initialize(void) {
 
   LOG_VBS("Mapped SRAM (base=0x%08x size=0x%08x)\n", SRAM_BASE, SRAM_SIZE);
 
-  /* Write TEST_ROM to FLASH_ROM */
-  err = uc_mem_write(ctx.uc, FLASH_ROM_BASE, TEST_ROM, sizeof(TEST_ROM));
+  /* Read from ctx.firmware */
+  frc = file_readbuf(ctx.firmware.bootrom, ROMBUF, sizeof(ROMBUF));
+  if (frc != FILE_SUCCESS) {
+    LOG_ERR("Failed to load BootROM %s\n", ctx.firmware.bootrom);
+    emu_exit(RC_CHIPEMU_FAILED_BOOTROM_READ);
+  }
+
+  /* Write ROMBUF to FLASH_ROM */
+  err = uc_mem_write(ctx.uc, FLASH_ROM_BASE, ROMBUF, sizeof(ROMBUF));
   if (err != UC_ERR_OK){
-    LOG_ERR("unable to write TEST_ROM to ROM_BASE\n");
+    LOG_ERR("unable to write ROMBUF to ROM_BASE: %s\n", uc_strerror(err));
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
 
-  LOG_VBS("Wrote TEST_ROM to FLASH_ROM\n");
+  LOG_VBS("Wrote ROMBUF to FLASH_ROM\n");
 
   /* Read ROM VTOR and set PC and SRAM. Default is 0xFFFFFFFF so we can easily halt execution if it isn't mapped correctly. */
   uint32_t sp = 0xFFFFFFFF;

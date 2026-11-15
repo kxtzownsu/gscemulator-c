@@ -2,3 +2,6 @@ build/
 flash/
 *.bin
 reference/
+
+# Remove once we have MMIO, File Reading, and Firmware Bundling working fully
+src/H1B3C/firmware/test-rom/

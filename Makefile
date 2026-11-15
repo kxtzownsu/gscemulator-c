@@ -22,7 +22,7 @@ FUZZ_DICT := tests/fuzz.dict
 FUZZ_CORPUS := $(BUILD_DIR)/fuzz-corpus
 FUZZ_CFLAGS := -std=c11 -g -O1 -Wall -Wextra -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer
 
-SRCS := $(shell find src -name '*.c')
+SRCS := $(filter-out src/H1B3C/firmware/%,$(shell find src -name '*.c'))
 OBJS := $(patsubst src/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 

@@ -40,6 +40,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   char *argv[MAX_ARGS];
   int argc;
   const char *chip;
+  const char *bootrom;
   const char *output;
   const char *name;
   int verbose;
@@ -67,12 +68,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   argcheck_set_description(ac, "libargs fuzz target");
 
   chip = argcheck_fequals(ac, "--chip", "-c", "Chip");
+  bootrom = argcheck_fequals(ac, "--bootrom", "-r", "BootROM");
   output = argcheck_fequals(ac, "--output", "-o", "Output");
   name = argcheck_fequals_str(ac, "--name", "-n", "Name");
   verbose = argcheck_fbool(ac, "--verbose", "-v", "Verbose");
   debug = argcheck_fbool(ac, "--debug", NULL, "Debug");
 
   if (chip) sink += strlen(chip);
+  if (bootrom) sink += strlen(bootrom);
   if (output) sink += strlen(output);
   if (name) sink += strlen(name);
   sink += (size_t)verbose + (size_t)debug;

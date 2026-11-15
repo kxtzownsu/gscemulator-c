@@ -6,7 +6,8 @@ Public headers. They define the contract for `src/`.
 - Every header needs an include guard. Include the headers it uses directly instead of relying on include order.
 - `libargs.h` is the public C API. Keep `ArgCheck` opaque and keep the `extern "C"` guard for C++ consumers.
 - Put `ARGCHECK_NORETURN` and printf-format attributes on declarations so every caller sees them.
-- `common/ctx.h` declares the global `Ctx ctx` container and `ctx_init`. Keep it a plain data struct; resource ownership stays with the code that created the resource, and `ctx.verbose` is the only verbose switch.
+- `common/common.h` is the umbrella include for `src/common/`. Keep it declarations and includes only, with no state or logic.
+- `common/ctx.h` declares the global `Ctx ctx` container and `ctx_init`. Keep it a plain data struct; resource ownership stays with the code that created the resource, and `ctx.verbose` is the only verbose switch. Firmware paths are fixed `char[MAX_FILE_PATH]` buffers; copy CLI strings in, never store `ArgCheck` pointers.
 - `common/emulator.h` owns `Emulator` and `EmulatorChips`. Keep them chip-agnostic. Adding a field or changing a function pointer signature requires updating every backend and `get_chipemu`.
 - `common/exit.h` exposes `emu_exit`; it must stay `ARGCHECK_NORETURN`.
 - `common/rc.h` owns `Rc`. Every exit path uses an `RC_*` value; add a new one instead of reusing an unrelated code.
