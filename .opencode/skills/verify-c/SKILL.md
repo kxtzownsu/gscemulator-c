@@ -17,7 +17,7 @@ It checks:
 - `--help`, the default run, and `--chip h1b3c -v`
 - an invalid chip exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
-- `gcc -fanalyzer` on `src/libargs.c` and `clang --analyze` on `src/main.c`
+- `gcc -fanalyzer` on `src/libargs.c` and `src/common/file.c`, and `clang --analyze` on `src/main.c`
 
 ## Manual equivalent
 

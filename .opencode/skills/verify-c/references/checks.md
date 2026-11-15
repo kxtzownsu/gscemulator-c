@@ -23,6 +23,7 @@ Use a longer run after parser rewrites, allocation changes, or new CLI syntax.
 
 ```bash
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/libargs.c -o /tmp/libargs.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/file.c -o /tmp/file.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 

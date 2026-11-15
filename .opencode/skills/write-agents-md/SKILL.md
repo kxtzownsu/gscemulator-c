@@ -27,7 +27,7 @@ Keep the root under about 150 lines. Link to nested files instead of repeating m
 Current modules:
 
 - `include/AGENTS.md` - public headers, opaque APIs, prototype sync.
-- `src/common/AGENTS.md` - `emu_exit`, logger, chip-agnostic interface.
+- `src/common/AGENTS.md` - `ctx`, `emu_exit`, `Rc`, file helpers, logger, chip-agnostic interface.
 - `src/H1B3C/AGENTS.md` - Haven backend, `ready` contract, new-chip steps.
 - `tests/AGENTS.md` - fuzz harness, corpus, dictionary, help filtering.
 
@@ -40,6 +40,7 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `emu_exit` is `_Noreturn`, takes an `Rc`, and destroys `ctx.ac`.
 - `common/ctx.h` holds the global `Ctx` and `ctx_init` zeroes it.
 - `common/rc.h` defines every exit code; no raw numbers.
+- `common/file.h` returns `FileRC`; the helpers log, never call `emu_exit`, and count the trailing NUL in `buffer_size`.
 - `initialize` must set `ctx.chipemu.ready = true` after successful setup.
 - `LOG*` messages must be compile-time literals.
 - The fuzz harness filters `--help` and `-h` because destroy exits.

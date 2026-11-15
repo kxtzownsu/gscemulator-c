@@ -31,7 +31,7 @@ Run the binary directly:
 
 - `src/main.c` - CLI flow, chip selection, and emulator lifecycle.
 - `src/libargs.c`, `include/libargs.h` - argv parser and help printer.
-- `src/common/` - chip-agnostic emulator interface, exit handling, logger.
+- `src/common/` - chip-agnostic emulator interface, ctx, return codes, file I/O, exit handling, logger.
 - `src/H1B3C/` - Haven chip backend (H1B3C).
 - `tests/` - libFuzzer harness, dictionary, and seed corpus.
 - `include/` - public headers; implementation stays in `src/`.
@@ -55,6 +55,15 @@ libargs:
 - `argcheck_fbool` returns 0 or 1.
 - Every lookup also registers the flag for help output. Keep long names, short names, and descriptions stable once used.
 - `argcheck_destroy` is not idempotent. Do not call it twice.
+
+Files:
+
+- `common/file.h` owns `FileRC`, `file_readbuf`, and `file_writebuf`.
+- `file_readbuf(path, buf, buffer_size)` reads at most `buffer_size - 1` bytes into `buf` and NUL-terminates at `buf[read]`, so the last buffer byte holds the terminator when the file is truncated. It never allocates and leaves bytes past the terminator untouched.
+- `file_writebuf(path, buf, buffer_size)` creates or truncates `path` and writes exactly `buffer_size - 1` bytes; `buffer_size` includes the buffer's trailing NUL.
+- Both validate `path`, `buf`, and `buffer_size` before touching the file and return `FILE_INVALID_ARGUMENT` for bad input. `buffer_size == 0` and a `NULL` buffer are always invalid because the terminator needs room.
+- `FILE_PERMISSION_DENIED` covers `EACCES` and `EPERM`; other failures map to the specific cause.
+- These helpers log and return a code. They never call `emu_exit`; the caller decides whether a failure is fatal.
 
 Emulator:
 

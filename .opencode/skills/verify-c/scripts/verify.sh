@@ -34,6 +34,8 @@ fi
 if command -v gcc >/dev/null 2>&1; then
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/libargs.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/common/file.c -o "$TMP_O"
 fi
 
 if command -v clang >/dev/null 2>&1; then

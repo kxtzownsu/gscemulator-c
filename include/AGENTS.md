@@ -10,5 +10,6 @@ Public headers. They define the contract for `src/`.
 - `common/emulator.h` owns `Emulator` and `EmulatorChips`. Keep them chip-agnostic. Adding a field or changing a function pointer signature requires updating every backend and `get_chipemu`.
 - `common/exit.h` exposes `emu_exit`; it must stay `ARGCHECK_NORETURN`.
 - `common/rc.h` owns `Rc`. Every exit path uses an `RC_*` value; add a new one instead of reusing an unrelated code.
+- `common/file.h` owns `FileRC` and the file helpers. Keep them free of `ctx` and `emu_exit`; they report failures with a code and treat `buffer_size` as including the trailing NUL.
 - Chip headers expose only lifecycle entry points. Chip-specific state and helpers stay in `src/<chip>/`.
 - Keep prototypes in sync with definitions. A header change is not complete until all implementations, `main.c`, and the fuzz harness compile.
