@@ -42,6 +42,8 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `common/rc.h` defines every exit code; no raw numbers.
 - `common/file.h` returns `FileRC`; the helpers log, never call `emu_exit`, and count the trailing NUL in `buffer_size`.
 - `ctx.firmware` paths are fixed `char[MAX_FILE_PATH]` buffers; copy CLI strings in with `snprintf` and reject truncation.
+- Peripheral bases, sizes, and offsets live in `include/H1B3C/register_map.h`; MMIO handler offsets are relative to the region base.
+- MMIO callbacks must not call `emu_exit` or `uc_close`; log and return, or stop emulation first.
 - `initialize` must set `ctx.chipemu.ready = true` after successful setup.
 - `LOG*` messages must be compile-time literals.
 - The fuzz harness filters `--help` and `-h` because destroy exits.

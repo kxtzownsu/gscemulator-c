@@ -14,10 +14,10 @@ Run the bundled script:
 It checks:
 
 - `make clean && make`
-- `--help`, the default run, and `--chip h1b3c -v`
+- `--help`, a run without `--bootrom` exiting non-zero, and `-r <bootrom> -v`
 - an invalid chip exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
-- `gcc -fanalyzer` on `src/libargs.c` and `src/common/file.c`, and `clang --analyze` on `src/main.c`
+- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, and `src/common/peripherals/component.c`, and `clang --analyze` on `src/main.c`
 
 ## Manual equivalent
 
@@ -25,8 +25,8 @@ It checks:
 make clean && make
 BIN="build/$(uname -m)/gscemu"
 "$BIN" --help
-"$BIN"
-"$BIN" --chip h1b3c -v
+"$BIN" || true                    # exits 252 without --bootrom
+"$BIN" -r <bootrom> -v
 "$BIN" --chip invalid || true
 make fuzz FUZZ_TIME=1
 ```

@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef COMMON_COMMON_H
+#define COMMON_COMMON_H
 
 #include <libargs.h>
 
@@ -10,4 +10,4 @@
 #include <common/logger.h>
 #include <common/rc.h>
 
-#endif /* COMMON_H */
+#endif /* COMMON_COMMON_H */

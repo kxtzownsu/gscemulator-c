@@ -1,5 +1,6 @@
 #include <H1B3C/emulator.h>
 #include <H1B3C/memory.h>
+#include <H1B3C/peripherals.h>
 
 #include <string.h>
 
@@ -56,7 +57,7 @@ void Havn_Initialize(void) {
   frc = file_readbuf(ctx.firmware.bootrom, ROMBUF, sizeof(ROMBUF));
   if (frc != FILE_SUCCESS) {
     LOG_ERR("Failed to load BootROM %s\n", ctx.firmware.bootrom);
-    emu_exit(RC_CHIPEMU_FAILED_BOOTROM_READ);
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
 
   /* Write ROMBUF to FLASH_ROM */
@@ -97,6 +98,8 @@ void Havn_Initialize(void) {
     LOG_ERR("Failed to set PC (0x%08x): %s\n", pc, uc_strerror(err));
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
+
+  initialize_peripherals();
 
   ctx.chipemu.ready = true;
 }

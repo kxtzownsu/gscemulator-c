@@ -31,8 +31,9 @@ Run the binary directly:
 
 - `src/main.c` - CLI flow, chip selection, and emulator lifecycle.
 - `src/libargs.c`, `include/libargs.h` - argv parser and help printer.
-- `src/common/` - chip-agnostic emulator interface, ctx, return codes, file I/O, exit handling, logger.
+- `src/common/` - chip-agnostic emulator interface, ctx, return codes, file I/O, peripheral framework, exit handling, logger.
 - `src/H1B3C/` - Haven chip backend (H1B3C).
+- `src/H1B3C/peripherals/` - H1B3C MMIO components and their init table.
 - `tests/` - libFuzzer harness, dictionary, and seed corpus.
 - `include/` - public headers; implementation stays in `src/`.
 - `.opencode/skills/` - repo-local skills for fuzzing, chip work, libargs, and verification.
@@ -44,7 +45,7 @@ Examples belong in `examples/`. Reference material belongs in `reference/`, whic
 CLI:
 
 - `--chip` / `-c` selects a chip. Omitting it means `h1b3c`.
-- `--bootrom` / `-r` copies the BootROM path into `ctx.firmware.bootrom`. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
+- `--bootrom` / `-r` copies the BootROM path into `ctx.firmware.bootrom`. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`. H1B3C requires a BootROM; omitting `-r` exits with `RC_CHIPEMU_FAILED_INIT`.
 - `--verbose` / `-v` enables verbose logging.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -66,6 +67,16 @@ Files:
 - `FILE_PERMISSION_DENIED` covers `EACCES` and `EPERM`; other failures map to the specific cause.
 - These helpers log and return a code. They never call `emu_exit`; the caller decides whether a failure is fatal.
 
+Peripherals:
+
+- `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`) and `MmioRegion` (`component`, `base`, `size`).
+- `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
+- `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`.
+- `include/H1B3C/register_map.h` is the single source for peripheral bases, region sizes, and register offsets. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
+- Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
+- Never call `emu_exit` or `uc_close` from an MMIO callback. Log and return 0, or set a fault flag and call `uc_emu_stop` so cleanup happens after `uc_emu_start` returns.
+- `DEFINE_BASIC_REGISTER` is file-scope singleton only. Components that need per-instance state use `Component.state`.
+
 Emulator:
 
 - `get_chipemu(chip)` fills `ctx.chipemu` with `initialize`, `start_emulation`, and `end_emulation`.
@@ -75,7 +86,7 @@ Emulator:
 
 Context:
 
-- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, `firmware`, and `verbose`.
+- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, `firmware`, `components`, and `verbose`.
 - `ctx_init` zeroes the container; `main` calls it before touching anything else.
 - `ctx.verbose` is the only verbose switch. `LOG_VBS` reads it; do not add a second flag.
 - Ownership follows the field: `argcheck_destroy` frees `ctx.ac`, and a backend's `end_emulation` closes `ctx.uc` and sets it to NULL. Never destroy or close the same resource twice.
@@ -89,7 +100,8 @@ Return codes:
 
 ## Security rules
 
-- Treat ROMs, CLI arguments, paths, and guest data as untrusted.
+- Treat ROMs, CLI arguments, paths, guest data, and MMIO writes as untrusted.
+- Validate MMIO offsets and sizes before using them to index state; unknown offsets must not write outside the component's state.
 - Never pass untrusted data as a `printf`/`LOG*` format string. Use `LOG("%s", value)`. The Makefile makes non-literal formats a build error.
 - Check every allocation. Use `size_t` and overflow guards for allocation arithmetic.
 - Keep the public API opaque. Do not expose internal structs in headers.

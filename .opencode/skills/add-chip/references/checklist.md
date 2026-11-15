@@ -7,6 +7,8 @@ Copy this list into the task and tick each item.
 - [ ] `src/<CHIP>/emulator.c`: all three hooks implemented
 - [ ] `initialize` sets `ctx.chipemu.ready = true` only after success
 - [ ] `end_emulation` is safe after a failed or partial initialize
+- [ ] `include/<CHIP>/register_map.h`: peripheral bases, sizes, 4-byte-aligned offsets
+- [ ] `src/<CHIP>/peripherals/`: components registered and mapped in `initialize_peripherals()`
 - [ ] `src/main.c`: header included
 - [ ] `src/main.c`: `get_chipemu` case fills `ctx.chipemu` with all three pointers
 - [ ] `src/main.c`: lowercase chip string maps to the enum

@@ -14,8 +14,16 @@ make
 BIN="build/$(uname -m)/gscemu"
 
 "$BIN" --help >/dev/null
-"$BIN" >/dev/null
-"$BIN" --chip h1b3c -v >/dev/null
+if "$BIN" >/dev/null 2>&1; then
+  echo "verify-c: run without --bootrom unexpectedly succeeded" >&2
+  exit 1
+fi
+
+if [ -n "${VERIFY_BOOTROM:-}" ]; then
+  "$BIN" -r "$VERIFY_BOOTROM" -v >/dev/null
+else
+  echo "verify-c: VERIFY_BOOTROM not set, skipped the boot lifecycle" >&2
+fi
 
 if "$BIN" --chip invalid >/dev/null 2>&1; then
   echo "verify-c: invalid chip unexpectedly succeeded" >&2
@@ -36,6 +44,8 @@ if command -v gcc >/dev/null 2>&1; then
     -c src/libargs.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/common/file.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/common/peripherals/component.c -o "$TMP_O"
 fi
 
 if command -v clang >/dev/null 2>&1; then

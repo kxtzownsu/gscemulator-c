@@ -6,6 +6,7 @@
 
 #include <libargs.h>
 #include <common/emulator.h>
+#include <common/peripherals/component.h>
 
 #define MAX_FILE_PATH 512
 
@@ -21,6 +22,8 @@ typedef struct {
   Emulator chipemu;
   uc_engine *uc;
   Firmware firmware;
+  Component components[COMPONENT_MAX];
+  size_t component_count;
   bool verbose;
 } Ctx;
 
