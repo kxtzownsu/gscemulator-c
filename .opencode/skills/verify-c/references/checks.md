@@ -2,10 +2,13 @@
 
 ## Expected results
 
-- `make clean && make` exits 0 with no warnings.
-- `./build/$(uname -m)/gscemu --help` exits 0 and prints usage plus registered flags.
-- `./build/$(uname -m)/gscemu` without `-r` exits with `RC_CHIPEMU_FAILED_INIT` (252).
+- `make clean && make BUNDLED_FIRMWARE=0` exits 0 with no warnings.
+- `make clean && make` exits 0 when `src/<CHIP>/firmware/{bootrom,firmware}.bin` or the matching `BUNDLED_<CHIP>_*` overrides exist; without them it fails at the bundled-header target.
+- `./build/$(uname -m)/gscemu --help` exits 0 and prints usage plus registered flags, including `--bootrom` and `--firmware`.
+- With `BUNDLED_FIRMWARE=0`, `./build/$(uname -m)/gscemu` without `-r` exits with `RC_CHIPEMU_FAILED_INIT` (252).
+- With a bundled build, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN`; the exit status depends on the bundled image.
 - `./build/$(uname -m)/gscemu -r <bootrom> -v` runs the H1B3C lifecycle and prints verbose logs.
+- `./build/$(uname -m)/gscemu -f <firmware> -r <bootrom>` accepts `--firmware`; H1B3C stores the path but does not load it yet.
 - `./build/$(uname -m)/gscemu --chip invalid` exits with `RC_ARG_CHIP_INVALID` (254).
 - `make fuzz FUZZ_TIME=1` exits 0 with no ASan/UBSan report.
 
@@ -24,6 +27,8 @@ Use a longer run after parser rewrites, allocation changes, or new CLI syntax.
 ```bash
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/libargs.c -o /tmp/libargs.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/file.c -o /tmp/file.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/essential-memory.c -o /tmp/essential-memory.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/vtor.c -o /tmp/vtor.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/peripherals/component.c -o /tmp/component.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```

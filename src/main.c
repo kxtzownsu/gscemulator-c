@@ -19,6 +19,7 @@ static void get_chipemu(EmulatorChips chip) {
 int main(int argc, char **argv) {
   const char *chip;
   const char *rom_path;
+  const char *fw_path;
   int path_len;
 
   ctx_init();
@@ -29,18 +30,39 @@ int main(int argc, char **argv) {
   argcheck_set_description(ctx.ac, "gscemulator ported to C");
 
   chip = argcheck_fequals(ctx.ac, "--chip", "-c", "Chip to emulate [ h1b3c | h1c3m | h1d3c | h1d3m | npcx ]");
-  rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Must be less than FLASH_ROM_SIZE)");
+  rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Overrides bundled BootROM binary for specified chip)");
+  fw_path = argcheck_fequals(ctx.ac, "--firmware", "-f", "Firmware binary to use (Overrides bundled firmware binary for specified chip)");
   ctx.verbose = argcheck_fbool(ctx.ac, "--verbose", "-v", "Verbose output");
 
   argcheck_check_help(ctx.ac);
 
   if (rom_path != NULL) {
+    ctx.firmware.useBundledROM = false;
     path_len = snprintf(ctx.firmware.bootrom, sizeof(ctx.firmware.bootrom), "%s", rom_path);
     if (path_len < 0 || (size_t)path_len >= sizeof(ctx.firmware.bootrom)) {
       LOG_ERR("BootROM path is too long\n");
       emu_exit(RC_ARG_PATH_TOO_LONG);
     }
   }
+  #ifdef BUNDLED_FIRMWARE
+  else {
+    ctx.firmware.useBundledROM = true;
+  }
+  #endif /* BUNDLED_FIRMWARE */
+
+  if (fw_path != NULL) {
+    ctx.firmware.useBundledFW = false;
+    path_len = snprintf(ctx.firmware.progfw, sizeof(ctx.firmware.progfw), "%s", fw_path);
+    if (path_len < 0 || (size_t)path_len >= sizeof(ctx.firmware.progfw)) {
+      LOG_ERR("Firmware path is too long\n");
+      emu_exit(RC_ARG_PATH_TOO_LONG);
+    }
+  }
+  #ifdef BUNDLED_FIRMWARE
+  else {
+    ctx.firmware.useBundledFW = true;
+  }
+  #endif /* BUNDLED_FIRMWARE */
 
   /* The default chip is H1B3C. */
   if (!chip) chip = "h1b3c";

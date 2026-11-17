@@ -1,6 +1,8 @@
 #ifndef H1B3C_MEMORY_H
 #define H1B3C_MEMORY_H
 
+#include <common/essential-memory.h>
+
 #define FLASH_ROM_BASE 0x00000000
 #define FLASH_ROM_SIZE (8 * 1024) /* 8KiB */
 
@@ -20,5 +22,7 @@ INFO is split into two regions:
 
 #define FLASH_PROG_BASE 0x40000
 #define FLASH_PROG_SIZE (512 * 1024) /* 512KiB */
+
+extern const EssentialMemoryEntry H1B3C_EssentialMemoryArray[];
 
 #endif /* H1B3C_MEMORY_H */

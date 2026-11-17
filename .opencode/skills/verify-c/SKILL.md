@@ -13,16 +13,16 @@ Run the bundled script:
 
 It checks:
 
-- `make clean && make`
-- `--help`, a run without `--bootrom` exiting non-zero, and `-r <bootrom> -v`
+- `make clean && make BUNDLED_FIRMWARE=0`
+- `--help`, a run without `--bootrom` exiting non-zero (source-only build), and `-r <bootrom> -v`
 - an invalid chip exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
-- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, and `src/common/peripherals/component.c`, and `clang --analyze` on `src/main.c`
+- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, `src/common/essential-memory.c`, `src/common/vtor.c`, and `src/common/peripherals/component.c`, and `clang --analyze` on `src/main.c`
 
 ## Manual equivalent
 
 ```bash
-make clean && make
+make clean && make BUNDLED_FIRMWARE=0
 BIN="build/$(uname -m)/gscemu"
 "$BIN" --help
 "$BIN" || true                    # exits 252 without --bootrom
@@ -30,6 +30,13 @@ BIN="build/$(uname -m)/gscemu"
 "$BIN" --chip invalid || true
 make fuzz FUZZ_TIME=1
 ```
+
+## Bundled builds
+
+Plain `make` uses `BUNDLED_FIRMWARE=1` and needs `src/<CHIP>/firmware/bootrom.bin`
+and `src/<CHIP>/firmware/firmware.bin` (or `BUNDLED_<CHIP>_*` overrides). With a
+bundled build, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN` instead of exiting
+252. The verifier uses `BUNDLED_FIRMWARE=0` so it works in a clean checkout.
 
 ## Rules
 

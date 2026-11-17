@@ -23,6 +23,7 @@ Only H1B3C is implemented. The help text lists future chips, but they have no ba
 - `end_emulation(void)` takes no arguments, uses `ctx` for state, and must tolerate a partially initialized backend.
 - `emu_exit` is `_Noreturn`, takes an `Rc`, and may call `end_emulation` before destroying `ctx.ac`. Do not call `exit` from a backend; use an `RC_*` value from `common/rc.h` for fatal errors.
 - Peripherals register with `component_register` and are mapped in `initialize_peripherals()` through `component_map_mmio`. MMIO callbacks must not call `emu_exit` or `uc_close`.
+- Bundled firmware: `--bootrom`/`--firmware` override the `BUNDLED_<CHIP>_*` arrays. The backend picks file vs bundled through `ctx.firmware.useBundledROM`/`useBundledFW` under `#ifdef BUNDLED_FIRMWARE`.
 
 ## Steps
 
@@ -30,11 +31,15 @@ Only H1B3C is implemented. The help text lists future chips, but they have no ba
 2. Add `include/<CHIP>/emulator.h` with an include guard and the three lifecycle prototypes.
 3. Add `src/<CHIP>/emulator.c`. H1B3C uses the `Havn_` prefix; pick a short, consistent prefix for the new chip.
 4. Include the new header in `src/main.c`, add a `case` in `get_chipemu`, and fill `ctx.chipemu` with the three function pointers.
-5. Add `include/<CHIP>/register_map.h` for peripheral bases, sizes, and 4-byte-aligned register offsets.
-6. Add `src/<CHIP>/peripherals/` components and wire `initialize_peripherals()` with `component_register` and `component_map_mmio`.
-7. Extend chip string parsing in `main.c`, update the `--chip` help text, and keep the default at `h1b3c`.
-8. Add the lowercase chip name to `tests/fuzz.dict`.
-9. Verify with `make clean && make`, `--chip <name> -v`, an invalid chip, and `make fuzz FUZZ_TIME=1`.
+5. Add `include/<CHIP>/memory.h` and `src/<CHIP>/memory.c` with the essential memory table; mark one ROM and one firmware role, assign it to `ctx.essential_memory`, and call `map_essential_memory()` before loading firmware.
+6. Call `load_firmware()` with the chip's bundled arrays under `#ifdef BUNDLED_FIRMWARE` (or NULLs for a source-only build).
+7. Call `set_sp_pc(ctx.uc, <VTOR base>)` during initialize when the chip boots from a fixed vector table.
+8. Add `include/<CHIP>/register_map.h` for peripheral bases, sizes, and 4-byte-aligned register offsets.
+9. Add `src/<CHIP>/peripherals/` components and wire `initialize_peripherals()` with `component_register` and `component_map_mmio`.
+10. Add `src/<CHIP>/firmware/{bootrom,firmware}.bin`, add the chip to `BUNDLED_CHIPS`, and include the `BUNDLED_<CHIP>_*` arrays under `#ifdef BUNDLED_FIRMWARE` when bundled boot is supported.
+11. Extend chip string parsing in `main.c`, update the `--chip` help text, and keep the default at `h1b3c`.
+12. Add the lowercase chip name to `tests/fuzz.dict`.
+13. Verify with `make clean && make BUNDLED_FIRMWARE=0` (or plain `make` with firmware inputs), `--chip <name> -r <bootrom> -v`, an invalid chip, and `make fuzz FUZZ_TIME=1`.
 
 See [checklist](references/checklist.md) for the exact file list.
 
@@ -43,4 +48,5 @@ See [checklist](references/checklist.md) for the exact file list.
 - Do not add chip-specific fields to `common/Emulator`. Keep backend state private to `src/<CHIP>/`.
 - Do not put chip logic in `src/common/`.
 - Do not advertise a chip as working until its backend exists and has been smoke-tested.
+- Do not hand-edit `include/common/bundled-firmware.h`; regenerate it with `scripts/generate_firmware_header.sh`.
 - If the backend needs per-instance state, extend the interface deliberately instead of hiding state in globals.

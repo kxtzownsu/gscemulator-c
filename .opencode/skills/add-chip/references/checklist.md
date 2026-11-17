@@ -7,15 +7,20 @@ Copy this list into the task and tick each item.
 - [ ] `src/<CHIP>/emulator.c`: all three hooks implemented
 - [ ] `initialize` sets `ctx.chipemu.ready = true` only after success
 - [ ] `end_emulation` is safe after a failed or partial initialize
+- [ ] `include/<CHIP>/memory.h` and `src/<CHIP>/memory.c`: essential memory table with region permissions and one ROM/firmware role each
+- [ ] `initialize` assigns `ctx.essential_memory`, calls `map_essential_memory()`, then calls `load_firmware()` before firmware writes
+- [ ] `initialize` calls `set_sp_pc()` with the chip VTOR base
 - [ ] `include/<CHIP>/register_map.h`: peripheral bases, sizes, 4-byte-aligned offsets
 - [ ] `src/<CHIP>/peripherals/`: components registered and mapped in `initialize_peripherals()`
+- [ ] `src/<CHIP>/firmware/{bootrom,firmware}.bin`: inputs present and the chip added to `BUNDLED_CHIPS`
+- [ ] backend uses `BUNDLED_<CHIP>_*` under `#ifdef BUNDLED_FIRMWARE` when bundled boot is supported
 - [ ] `src/main.c`: header included
 - [ ] `src/main.c`: `get_chipemu` case fills `ctx.chipemu` with all three pointers
 - [ ] `src/main.c`: lowercase chip string maps to the enum
 - [ ] `src/main.c`: `--chip` help text updated
 - [ ] `tests/fuzz.dict`: lowercase chip string added
-- [ ] `make clean && make`
-- [ ] `./build/$(uname -m)/gscemu --chip <name> -v`
+- [ ] `make clean && make BUNDLED_FIRMWARE=0` (or plain `make` with firmware inputs)
+- [ ] `./build/$(uname -m)/gscemu --chip <name> -r <bootrom> -v`
 - [ ] invalid chip still exits non-zero
 - [ ] `make fuzz FUZZ_TIME=1`
 

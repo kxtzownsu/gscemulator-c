@@ -42,7 +42,7 @@ make fuzz
 ## Verification
 
 ```bash
-make clean && make
+make clean && make BUNDLED_FIRMWARE=0
 make fuzz FUZZ_TIME=1
 ```
 

@@ -9,7 +9,7 @@ FUZZ_LOG="$(mktemp)"
 trap 'rm -f "$TMP_O" "$FUZZ_LOG"' EXIT
 
 make clean
-make
+make BUNDLED_FIRMWARE=0
 
 BIN="build/$(uname -m)/gscemu"
 
@@ -44,6 +44,10 @@ if command -v gcc >/dev/null 2>&1; then
     -c src/libargs.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/common/file.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/common/essential-memory.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/common/vtor.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/common/peripherals/component.c -o "$TMP_O"
 fi
