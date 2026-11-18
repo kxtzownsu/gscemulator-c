@@ -15,6 +15,7 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set.
 - Register bases and offsets belong in the matching `include/H1B3C/peripherals/<name>.h`; `DEFAULT_REG_LENGTH` in `H1B3C/peripherals.h` is the MMIO region size for every peripheral. Keep offsets 4-byte aligned.
 - `M3` is mapped at `REG_M3_BASE_ADDR` (`0xE0000000`, size `DEFAULT_REG_LENGTH`) and handles `DEMCR` at `REG_M3_DEMCR_OFFSET` (`0xEDFC`).
+- `FUSE` is mapped at `REG_FUSE_BASE_ADDR` (`0x40450000`, size `DEFAULT_REG_LENGTH`). Reads return the matching `fuse_defaults` value or `REG_FUSE_BLANK_VALUE` (`0x55555555`); writes are ignored and only logged at verbose level, matching the read-only eFuse.
 - MMIO handlers must not call `emu_exit` or `uc_close`; log and return 0, or stop emulation and let `Havn_StartEmulation` clean up.
 - `DEFINE_BASIC_REGISTER` is for file-scope singletons only. Use `Component.state` for components that need instance state.
 - `Havn_StartEmulation` and `Havn_EndEmulation` must not call `exit`. Return normally, or use `emu_exit` for fatal errors.
