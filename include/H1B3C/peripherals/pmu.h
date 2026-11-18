@@ -1,0 +1,14 @@
+#ifndef H1B3C_PERIPHERALS_PMU_H
+#define H1B3C_PERIPHERALS_PMU_H
+
+#include <common/peripherals/component.h>
+
+#define REG_PMU_BASE_ADDR 0x40000000
+#define REG_PMU_PERICLKSET0_OFFSET 0x64
+#define REG_PMU_PERICLKCLR0_OFFSET 0x68
+#define REG_PMU_PERICLKSET1_OFFSET 0x6C
+#define REG_PMU_PERICLKCLR1_OFFSET 0x70
+
+Component *PMU_Initialize(void);
+
+#endif /* H1B3C_PERIPHERALS_PMU_H */

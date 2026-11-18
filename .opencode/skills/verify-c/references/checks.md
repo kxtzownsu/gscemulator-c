@@ -37,6 +37,7 @@ gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/periphe
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/m3.c -o /tmp/m3.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/fuses.c -o /tmp/fuses.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/globalsec.c -o /tmp/globalsec.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/pmu.c -o /tmp/pmu.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 

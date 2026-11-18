@@ -61,6 +61,8 @@ if command -v gcc >/dev/null 2>&1; then
     -c src/H1B3C/peripherals/fuses.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/H1B3C/peripherals/globalsec.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/H1B3C/peripherals/pmu.c -o "$TMP_O"
 fi
 
 if command -v clang >/dev/null 2>&1; then

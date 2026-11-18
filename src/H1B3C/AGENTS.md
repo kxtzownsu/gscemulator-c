@@ -17,6 +17,7 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - `M3` is mapped at `REG_M3_BASE_ADDR` (`0xE0000000`, size `DEFAULT_REG_LENGTH`) and handles `DWT_CTRL`, `CPUID`, `ITCMCR`, and `DEMCR`. `CPUID` reads `0x410FC331` and is read-only; `ITCMCR` reads back `7` after any write, matching the Cr50 ROM.
 - `FUSE` is mapped at `REG_FUSE_BASE_ADDR` (`0x40450000`, size `DEFAULT_REG_LENGTH`). Reads return the matching `fuse_defaults` value or `REG_FUSE_BLANK_VALUE` (`0x55555555`); writes are ignored and only logged at verbose level, matching the read-only eFuse.
 - `GLOBALSEC` is mapped at `REG_GLOBALSEC_BASE_ADDR` (`0x40090000`, size `DEFAULT_REG_LENGTH`). `ALERT_CONTROL` and `DBG_CONTROL` (`0x405C`, `0xA6D0`) are plain registers; `DUMMYKEY0..2` (`0x9598`, `0xAF04`, `0xB2AC`) back a three-entry array indexed by offset.
+- `PMU` is mapped at `REG_PMU_BASE_ADDR` (`0x40000000`, size `DEFAULT_REG_LENGTH`). `PERICLKSET0/1` set bits and `PERICLKCLR0/1` clear bits in a 48-entry clock-enable array; reads on any of the four return the current enabled mask.
 - MMIO handlers must not call `emu_exit` or `uc_close`; log and return 0, or stop emulation and let `Havn_StartEmulation` clean up.
 - `DEFINE_BASIC_REGISTER` is for file-scope singletons only. Use `Component.state` for components that need instance state.
 - `Havn_StartEmulation` and `Havn_EndEmulation` must not call `exit`. Return normally, or use `emu_exit` for fatal errors.
