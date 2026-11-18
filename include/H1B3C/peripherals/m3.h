@@ -4,8 +4,10 @@
 #include <common/peripherals/component.h>
 
 #define REG_M3_BASE_ADDR 0xE0000000
-#define REG_M3_DEMCR_OFFSET 0xEDFC
 #define REG_M3_DWT_CTRL_OFFSET 0x1000
+#define REG_M3_CPUID_OFFSET 0xED00
+#define REG_M3_DEMCR_OFFSET 0xEDFC
+#define REG_M3_ITCMCR_OFFSET 0xEF90
 
 Component *M3_Initialize(void);
 

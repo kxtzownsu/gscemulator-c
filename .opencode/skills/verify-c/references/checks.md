@@ -34,6 +34,9 @@ gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/memory-
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/version.c -o /tmp/version.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/vtor.c -o /tmp/vtor.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/peripherals/component.c -o /tmp/component.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/m3.c -o /tmp/m3.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/fuses.c -o /tmp/fuses.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/H1B3C/peripherals/globalsec.c -o /tmp/globalsec.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 

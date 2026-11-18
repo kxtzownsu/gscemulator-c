@@ -17,7 +17,7 @@ It checks:
 - `--help`, `--version`, a run without `--bootrom` exiting non-zero (source-only build), and `-r <bootrom> -v`
 - an invalid chip exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
-- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, `src/common/essential-memory.c`, `src/common/memory-fault.c`, `src/common/version.c`, `src/common/vtor.c`, and `src/common/peripherals/component.c`, and `clang --analyze` on `src/main.c`
+- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, `src/common/essential-memory.c`, `src/common/memory-fault.c`, `src/common/version.c`, `src/common/vtor.c`, `src/common/peripherals/component.c`, and the `src/H1B3C/peripherals/*.c` components, and `clang --analyze` on `src/main.c`
 
 ## Manual equivalent
 
