@@ -10,9 +10,11 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - `Havn_Initialize` assigns the table to `ctx.essential_memory`, calls `map_essential_memory()`, then calls `load_firmware()` with the `BUNDLED_H1B3C_*` arrays under `BUNDLED_H1B3C` or NULLs when H1B3C is not bundled. INFO1 remains a chip-local write.
 - `Havn_Initialize` calls `set_sp_pc(ctx.uc, FLASH_ROM_BASE)` after the flash writes. `set_sp_pc` sets SP/PC; `Havn_StartEmulation` sets the Thumb bit.
 - `init_unicorn` installs the memory fault hook after `uc_open` and the Cortex-M3 model setup, so unmapped/protected accesses log the address, access type, and PC.
+- `Havn_StartEmulation` checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT` before inspecting the engine error.
 - `ctx.firmware.progfw` / `--firmware` is loaded into the firmware region by `load_firmware`.
 - Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set.
-- Register bases, region sizes, and offsets belong in `include/H1B3C/register_map.h`. Keep offsets 4-byte aligned.
+- Register bases and offsets belong in the matching `include/H1B3C/peripherals/<name>.h`; `DEFAULT_REG_LENGTH` in `H1B3C/peripherals.h` is the MMIO region size for every peripheral. Keep offsets 4-byte aligned.
+- `M3` is mapped at `REG_M3_BASE_ADDR` (`0xE0000000`, size `DEFAULT_REG_LENGTH`) and handles `DEMCR` at `REG_M3_DEMCR_OFFSET` (`0xEDFC`).
 - MMIO handlers must not call `emu_exit` or `uc_close`; log and return 0, or stop emulation and let `Havn_StartEmulation` clean up.
 - `DEFINE_BASIC_REGISTER` is for file-scope singletons only. Use `Component.state` for components that need instance state.
 - `Havn_StartEmulation` and `Havn_EndEmulation` must not call `exit`. Return normally, or use `emu_exit` for fatal errors.
@@ -24,7 +26,7 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
   2. add `include/<CHIP>/emulator.h` and `src/<CHIP>/emulator.c`
   3. add a `case` in `get_chipemu`
   4. add `include/<CHIP>/memory.h` and `src/<CHIP>/memory.c` with the essential memory table; assign it to `ctx.essential_memory`, call `map_essential_memory()`, then `load_firmware()`
-  5. add `include/<CHIP>/register_map.h` and `src/<CHIP>/peripherals/`
+  5. add `include/<CHIP>/peripherals.h` with `DEFAULT_REG_LENGTH`, one `include/<CHIP>/peripherals/<name>.h` per peripheral, and `src/<CHIP>/peripherals/`
   6. add `src/<CHIP>/firmware/{bootrom,firmware}.bin` and the matching `BUNDLED_<CHIP>_*` arrays under `#ifdef BUNDLED_<CHIP>`
   7. add the chip to `BUNDLED_CHIPS` in the Makefile
   8. update the `--chip` help text, default selection if needed, and `tests/fuzz.dict`

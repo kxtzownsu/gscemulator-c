@@ -111,6 +111,12 @@ void Havn_StartEmulation(void) {
   LOG_VBS("Starting emulation at PC=0x%08x and SP=0x%08x\n", pc, sp);
 
   err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
+
+  if (memory_fault_occurred()) {
+    LOG_ERR("Emulation stopped due to a memory fault\n");
+    emu_exit(RC_CHIPEMU_MEMORY_FAULT);
+  }
+
   if (err != UC_ERR_OK) {
     LOG_ERR("Emulation stopped with error: %s\n", uc_strerror(err));
     emu_exit(RC_CHIPEMU_EMULATION_ERROR);

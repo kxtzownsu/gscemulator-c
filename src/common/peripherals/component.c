@@ -3,8 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <common/ctx.h>
-#include <common/logger.h>
+#include <common/common.h>
 
 static uint64_t component_mmio_read(uc_engine *uc, uint64_t offset, unsigned size, void *user_data) {
   Component *component = user_data;
@@ -101,4 +100,6 @@ void component_log_unhandled(const Component *component, const char *access, uin
 
   LOG_ERR("Unhandled %s register 0x%llx in component %s at pc=0x%08x\n",
           access, (unsigned long long)offset, component->name, pc);
+  
+  emu_exit(RC_CHIPEMU_MEMORY_FAULT);
 }

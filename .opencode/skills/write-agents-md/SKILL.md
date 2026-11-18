@@ -44,7 +44,7 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `ctx.firmware` paths are fixed `char[MAX_FILE_PATH]` buffers with `useBundledROM`/`useBundledFW`; `main` fills the paths from `--bootrom`/`--firmware` and the backend sets the bundled flags when its `BUNDLED_<CHIP>` macro is defined and the path is empty. Copy CLI strings in with `snprintf` and reject truncation.
 - Each chip exposes an `EssentialMemoryEntry` table with an empty `NAME` terminator; mark one ROM and one firmware role, map it via `ctx.essential_memory` + `map_essential_memory` before flash writes, then call `load_firmware` to pre-fill and load the ROM/firmware regions.
 - `set_sp_pc(uc, vtor_base)` reads SP at offset `0x0` and PC at `0x4` and writes the ARM registers; it does not set the Thumb bit.
-- `install_memory_fault_hook` logs unmapped/protected memory reads, writes, and fetches with address and PC. Hook callbacks must not call `emu_exit` or `uc_close`.
+- `install_memory_fault_hook` logs unmapped/protected memory reads, writes, and fetches with address and PC, then sets its fault flag and stops emulation. Hook callbacks must not call `emu_exit` or `uc_close`; the backend checks `memory_fault_occurred()` after `uc_emu_start` and exits `RC_CHIPEMU_MEMORY_FAULT`.
 - `component_log_unhandled` logs an unknown MMIO offset with the component name, access type, and PC; use it in default register cases.
 - `make` defaults to `BUNDLED_FIRMWARE=1`, which adds `-DBUNDLED_FIRMWARE` and makes `include/common/bundled-firmware.h` a dependency. `BUNDLED_FIRMWARE=0` is the source-only build.
 - `make STATIC=1` links `build/<arch>/unicorn/libunicorn.a` with `third_party/unicorn/include`; the default build uses system pkg-config unicorn.
@@ -52,7 +52,7 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `PROGRAM_VERSION` is `0.1.0` in `scripts/make/version.mk`; `CHIPS` lists available chips and `BUNDLED_CHIPS` feeds the bundled firmware summary.
 - `BUNDLED_CHIPS` selects firmware pairs; the generated header defines `BUNDLED_<CHIP>` plus `BUNDLED_<CHIP>_BOOTROM_BIN` and `BUNDLED_<CHIP>_FIRMWARE_BIN`. Backends gate bundled use on their own `BUNDLED_<CHIP>`, not on `BUNDLED_FIRMWARE`.
 - `make clean` removes only `gscemu` and `build/<ARCH>/obj`; `make fullclean` removes the whole `build/<ARCH>` including the local unicorn build.
-- Peripheral bases, sizes, and offsets live in `include/H1B3C/register_map.h`; MMIO handler offsets are relative to the region base.
+- Peripheral bases and offsets live per peripheral in `include/H1B3C/peripherals/<name>.h`; `DEFAULT_REG_LENGTH` in `H1B3C/peripherals.h` is the MMIO region size and handler offsets are relative to the region base.
 - MMIO callbacks must not call `emu_exit` or `uc_close`; log and return, or stop emulation first.
 - `initialize` must set `ctx.chipemu.ready = true` after successful setup.
 - `LOG*` messages must be compile-time literals.

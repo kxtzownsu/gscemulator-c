@@ -109,9 +109,9 @@ Essential memory:
 
 Memory faults:
 
-- `common/memory-fault.h` owns `install_memory_fault_hook`, which registers `UC_HOOK_MEM_{READ,WRITE,FETCH}_INVALID` on `ctx.uc`.
-- The hook logs `Unmapped` or `Protected`, the access type, address, size, write value, and PC. It returns; `uc_emu_start` still fails and the backend exits.
-- Install it after `uc_open` and before `uc_emu_start`. Never call `emu_exit` or `uc_close` from the hook.
+- `common/memory-fault.h` owns `install_memory_fault_hook`, which registers `UC_HOOK_MEM_{READ,WRITE,FETCH}_INVALID` on `ctx.uc`, and `memory_fault_occurred`, which reports whether a fault was seen.
+- The hook logs `Unmapped` or `Protected`, the access type, address, size, write value, and PC, sets its fault flag, and calls `uc_emu_stop`. The backend checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT`, so no unmapped or protected access can continue silently.
+- Install it after `uc_open` and before `uc_emu_start`. Never call `emu_exit` or `uc_close` from the hook; stop emulation and let the caller clean up.
 
 Peripherals:
 
@@ -119,7 +119,7 @@ Peripherals:
 - `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
 - `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`.
 - `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC. Use it in per-component default cases; never exit from a component callback.
-- `include/H1B3C/register_map.h` is the single source for peripheral bases, region sizes, and register offsets. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
+- `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the MMIO region size. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
 - Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
 - Never call `emu_exit` or `uc_close` from an MMIO callback. Log and return 0, or set a fault flag and call `uc_emu_stop` so cleanup happens after `uc_emu_start` returns.
 - `DEFINE_BASIC_REGISTER` is file-scope singleton only. Components that need per-instance state use `Component.state`.
@@ -129,6 +129,7 @@ Emulator:
 - `get_chipemu(chip)` fills `ctx.chipemu` with `initialize`, `start_emulation`, and `end_emulation`.
 - `initialize()` must set `ctx.chipemu.ready = true` only after successful setup. `main` exits when `ready` is false.
 - `start_emulation()` and `end_emulation()` take no arguments and use `ctx`. `end_emulation` must tolerate a partially initialized backend because `emu_exit` may call it on failure.
+- `start_emulation()` checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT` when the hook recorded an unmapped or protected access.
 - `set_sp_pc(uc, vtor_base)` reads SP from `vtor_base + 0x0` and PC from `vtor_base + 0x4`, writes `UC_ARM_REG_SP`/`UC_ARM_REG_PC`, and exits with the VTOR `RC_*` codes on read failure. It does not set the Thumb bit; `start_emulation` does.
 - `emu_exit(Rc rc)` is `_Noreturn`: it calls `end_emulation` when one is set, destroys `ctx.ac`, and exits with `rc`. It clears `ctx.chipemu.end_emulation` and `ctx.ac` before running them, so a nested `emu_exit` cannot double-close or double-free. Never call `exit()` directly.
 
@@ -144,7 +145,7 @@ Return codes:
 
 - `common/rc.h` defines `Rc`. Every `emu_exit` call, `exit` call, and `main` return uses an `RC_*` value; never pass a raw number.
 - `RC_SUCCESS` covers a normal run and the help path.
-- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, and `RC_LOGGER_INVALID_TYPE` cover failures.
+- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, `RC_CHIPEMU_MEMORY_FAULT`, and `RC_LOGGER_INVALID_TYPE` cover failures.
 - Values are negative, so the process status is the low byte (`RC_ARG_CHIP_INVALID` reports as 254). Add a new `RC_*` value instead of reusing an unrelated one.
 
 Version:
