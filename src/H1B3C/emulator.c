@@ -48,7 +48,12 @@ void Havn_Initialize(void) {
   ctx.essential_memory = H1B3C_EssentialMemoryArray;
   map_essential_memory();
 
-#ifdef BUNDLED_FIRMWARE
+#ifdef BUNDLED_H1B3C
+  if (ctx.firmware.bootrom[0] == '\0') ctx.firmware.useBundledROM = true;
+  if (ctx.firmware.progfw[0] == '\0') ctx.firmware.useBundledFW = true;
+#endif
+
+#ifdef BUNDLED_H1B3C
   load_firmware(BUNDLED_H1B3C_BOOTROM_BIN, sizeof(BUNDLED_H1B3C_BOOTROM_BIN),
                 BUNDLED_H1B3C_FIRMWARE_BIN, sizeof(BUNDLED_H1B3C_FIRMWARE_BIN));
 #else

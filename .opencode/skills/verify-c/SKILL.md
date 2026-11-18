@@ -34,13 +34,14 @@ make fuzz FUZZ_TIME=1
 ## Bundled builds
 
 Plain `make` uses `BUNDLED_FIRMWARE=1` and needs `src/<CHIP>/firmware/bootrom.bin`
-and `src/<CHIP>/firmware/firmware.bin` (or `BUNDLED_<CHIP>_*` overrides). With a
-bundled build, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN` instead of exiting
-252. The verifier uses `BUNDLED_FIRMWARE=0` so it works in a clean checkout.
+and `src/<CHIP>/firmware/firmware.bin` (or `BUNDLED_<CHIP>_*` overrides). The
+generated header defines `BUNDLED_<CHIP>`; H1B3C only uses bundled images when
+`BUNDLED_H1B3C` is present and the matching path is empty. Otherwise omitting
+`-r` exits 252. The verifier uses `BUNDLED_FIRMWARE=0` so it works in a clean
+checkout.
 
 ## Rules
 
-- Do not use `make run`; it currently prepends `./` to an absolute `TARGET` and fails.
 - A normal build must be warning-free. Do not suppress warnings to get a pass.
 - If clang is missing, report that fuzzing was skipped instead of silently passing.
 - Sanitizer or analyzer findings are bugs. Fix them or report them with the command and output.

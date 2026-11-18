@@ -43,4 +43,4 @@ See [crash triage](references/crash-triage.md) for the detailed loop.
 - Keep the exact `--help` and `-h` filter. `argcheck_destroy` prints help and exits, which kills the fuzzer.
 - Keep `tests/corpus/` small and focused.
 - Do not add network access or external process execution to the harness.
-- If `libargs` gains a new `.c` dependency, add it to the `$(FUZZ_BIN)` prerequisites in the Makefile.
+- If `libargs` gains a new `.c` dependency, add it to the `$(FUZZ_BIN)` prerequisites in `scripts/make/fuzz.mk`.

@@ -6,7 +6,9 @@
 
 ```bash
 make                         # build build/$(uname -m)/gscemu
-make clean                   # remove the current architecture's build dir
+make clean                   # remove gscemu and its objects
+make fullclean               # remove build/<ARCH>, including unicorn and fuzz
+make STATIC=1                # static link against the local unicorn
 make fuzz                    # clang/libFuzzer + ASan/UBSan, 60s default
 make fuzz FUZZ_TIME=300      # longer run
 make fuzz FUZZ_TIME=0        # run until interrupted
@@ -14,18 +16,26 @@ make fuzz FUZZ_ARGS='-runs=1000000'
 ```
 
 `make` also regenerates `include/common/bundled-firmware.h` from one or more
-chip firmware pairs. Set `BUNDLED_CHIPS="H1B3C NPCX"` to bundle multiple chips;
+chip firmware pairs. Set `BUNDLED_CHIPS="H1B3C H1C3M"` (where `H1B3C` and `H1C3M` are placeholders for the specific chips) to bundle multiple chips;
 each chip reads `src/<CHIP>/firmware/bootrom.bin` and
 `src/<CHIP>/firmware/firmware.bin` by default. Override a pair with
 `BUNDLED_<CHIP>_BOOTROM_BIN=<path> BUNDLED_<CHIP>_FIRMWARE_BIN=<path>`, or run
 `scripts/generate_firmware_header.sh` directly with repeated `--chip` groups.
 The inputs are local-only and gitignored; the generated header is gitignored
-and included only under `#ifdef BUNDLED_FIRMWARE`.
+and included only under `#ifdef BUNDLED_FIRMWARE`. Each bundled chip also gets
+`#define BUNDLED_<CHIP> 1`; `BUNDLED_FIRMWARE` only gates the header, while a
+backend uses bundled data only when its own `BUNDLED_<CHIP>` is defined.
 
 `BUNDLED_FIRMWARE` defaults to `1`. That adds `-DBUNDLED_FIRMWARE`, makes the
-bundled header a build dependency, and lets H1B3C fall back to the bundled
-BootROM when `-r` is omitted. Use `make BUNDLED_FIRMWARE=0` for a source-only
+bundled header a build dependency, and lets a bundled chip fall back to its
+arrays when `-r`/`-f` is omitted. Use `make BUNDLED_FIRMWARE=0` for a source-only
 build with no firmware inputs.
+
+`STATIC=1` builds `build/$(uname -m)/unicorn/libunicorn.a` from
+`third_party/unicorn` and links that instead of the system `-lunicorn`. It adds
+`-Ithird_party/unicorn/include`, `-static`, and `-lpthread -lm`. The local clone
+lives in `third_party/unicorn` (gitignored); `make fullclean` removes the built
+static library under `build/<ARCH>`.
 
 Run the binary directly:
 
@@ -37,7 +47,7 @@ Run the binary directly:
 
 With a bundled build, `-r` is optional and the binary falls back to `BUNDLED_H1B3C_BOOTROM_BIN`.
 
-`make run` currently has an absolute-path bug; use the built binary until the target is fixed.
+`make run` builds and runs the target directly.
 
 - Normal builds use `gcc`; fuzzing uses `clang`.
 - A normal build must stay warning-free. Do not add `-w` or disable format warnings.
@@ -51,6 +61,7 @@ With a bundled build, `-r` is optional and the binary falls back to `BUNDLED_H1B
 - `src/H1B3C/` - Haven chip backend (H1B3C).
 - `src/H1B3C/peripherals/` - H1B3C MMIO components and their init table.
 - `scripts/generate_firmware_header.sh` - bundles one or more BootROM/firmware pairs into `include/common/bundled-firmware.h`.
+- `scripts/make/` - modular build logic (`toolchain.mk`, `variables.mk`, `setup.mk`, `firmware.mk`, `unicorn.mk`, `flags.mk`, `build.mk`, `fuzz.mk`, `clean.mk`).
 - `tests/` - libFuzzer harness, dictionary, and seed corpus.
 - `include/` - public headers; implementation stays in `src/`.
 - `.opencode/skills/` - repo-local skills for fuzzing, chip work, libargs, and verification.
@@ -63,8 +74,8 @@ CLI:
 
 - `--chip` / `-c` selects a chip. Omitting it means `h1b3c`.
 - `--bootrom` / `-r` copies the BootROM path into `ctx.firmware.bootrom` and clears `ctx.firmware.useBundledROM`. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
-- `--firmware` / `-f` copies the firmware path into `ctx.firmware.progfw` and clears `ctx.firmware.useBundledFW`. H1B3C stores it but does not load it yet. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
-- With a bundled build (`BUNDLED_FIRMWARE` defined), omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN` and omitting `-f` uses `BUNDLED_H1B3C_FIRMWARE_BIN`. With `BUNDLED_FIRMWARE=0`, omitting `-r` exits with `RC_CHIPEMU_FAILED_INIT`.
+- `--firmware` / `-f` copies the firmware path into `ctx.firmware.progfw` and clears `ctx.firmware.useBundledFW`. H1B3C loads it into the firmware region. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
+- With a chip that defines `BUNDLED_<CHIP>`, omitting `-r`/`-f` uses that chip's bundled arrays. Otherwise the file path is required; an empty path exits with `RC_CHIPEMU_FAILED_INIT`. With `BUNDLED_FIRMWARE=0`, nothing is bundled.
 - `--verbose` / `-v` enables verbose logging.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -92,7 +103,7 @@ Essential memory:
 - Each chip exposes a table terminated by an entry with an empty `NAME` and assigns it to `ctx.essential_memory`, e.g. `H1B3C_EssentialMemoryArray` in `include/H1B3C/memory.h`. Mark exactly one entry `ESSENTIAL_MEMORY_ROM` and one `ESSENTIAL_MEMORY_FIRMWARE`.
 - `map_essential_memory` maps every entry with `uc_mem_map` before any flash writes or `uc_emu_start`. Regions must not overlap.
 - `load_firmware(bundled_rom, bundled_rom_len, bundled_fw, bundled_fw_len)` finds the ROM and firmware roles, pre-fills each destination region with `0xFF`, loads the image from its `ctx.firmware` path or the bundled array according to `useBundledROM`/`useBundledFW`, and writes it with `uc_mem_write`. Missing roles exit `RC_CHIPEMU_FAILED_INIT`.
-- Permissions use `UC_PROT_*`; H1B3C maps ROM RX, SRAM RW, INFO0/INFO1 RW, and PROG RWX. `Havn_Initialize` calls `load_firmware` with the `BUNDLED_H1B3C_*` arrays under `BUNDLED_FIRMWARE`, or NULLs for a source-only build.
+- Permissions use `UC_PROT_*`; H1B3C maps ROM RX, SRAM RW, INFO0/INFO1 RW, and PROG RWX. `Havn_Initialize` sets `useBundledROM`/`useBundledFW` when `BUNDLED_H1B3C` is defined and the matching path is empty, then calls `load_firmware` with the `BUNDLED_H1B3C_*` arrays (or NULLs when the chip is not bundled).
 
 Memory faults:
 
@@ -159,12 +170,18 @@ Return codes:
 
 ### Makefile
 
+- Build logic lives in `scripts/make/*.mk`; the top-level `Makefile` only sets `project_name`, `GOAL`, includes the modules, and sets `.DEFAULT_GOAL`/`.PHONY`.
+- `toolchain.mk` owns host detection, `ARCH`, `Q`, the shell, and tool paths. `variables.mk` owns directories, source discovery, and fuzz paths. `flags.mk` owns compile/link flags. `build.mk` owns the target/object rules.
+- `ARCH` selects `build/<ARCH>`; it defaults to `uname -m`.
+- Recipes are silent by default and print a two-space label. Use `make VERBOSE=1` to show the full commands.
 - Recipe lines use tabs; variable assignments and indentation use 2 spaces.
 - Keep hardening flags and format warnings. Do not disable them to make a build pass.
-- Put build products under `build/<arch>/`. `make clean` only removes the current architecture.
+- Put build products under `build/<arch>/`. `make clean` removes only `gscemu` and `build/<ARCH>/obj`; `make fullclean` removes the whole `build/<ARCH>` (including the local unicorn build).
 - Add fuzz paths through the `FUZZ_*` variables instead of hardcoding them.
 - `BUNDLED_FIRMWARE ?= 1` adds `-DBUNDLED_FIRMWARE` and makes `include/common/bundled-firmware.h` a build dependency. `make BUNDLED_FIRMWARE=0` disables both.
-- `BUNDLED_CHIPS` selects the firmware pairs; each pair defaults to `src/<CHIP>/firmware/{bootrom,firmware}.bin`.
+- `BUNDLED_CHIPS` selects the firmware pairs; each pair defaults to `src/<CHIP>/firmware/{bootrom,firmware}.bin`. The generated header defines `BUNDLED_<CHIP>` per chip; backends gate bundled use on that macro, not on `BUNDLED_FIRMWARE`.
+- `STATIC=1` replaces the pkg-config unicorn flags with `third_party/unicorn/include`, `$(UNICORN_STATIC_LIB)`, `-static`, and `-lpthread -lm`.
+- `LOCAL_UNICORN=1` only builds the local static library; it does not switch the headers or link. Use `STATIC=1` for a local static link.
 - `SRCS` filters out `src/H1B3C/firmware/`; those files build for the emulated target, not the host. Do not add them to the host objects.
 
 ## Verification

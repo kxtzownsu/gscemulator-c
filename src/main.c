@@ -44,11 +44,6 @@ int main(int argc, char **argv) {
       emu_exit(RC_ARG_PATH_TOO_LONG);
     }
   }
-  #ifdef BUNDLED_FIRMWARE
-  else {
-    ctx.firmware.useBundledROM = true;
-  }
-  #endif /* BUNDLED_FIRMWARE */
 
   if (fw_path != NULL) {
     ctx.firmware.useBundledFW = false;
@@ -58,11 +53,6 @@ int main(int argc, char **argv) {
       emu_exit(RC_ARG_PATH_TOO_LONG);
     }
   }
-  #ifdef BUNDLED_FIRMWARE
-  else {
-    ctx.firmware.useBundledFW = true;
-  }
-  #endif /* BUNDLED_FIRMWARE */
 
   /* The default chip is H1B3C. */
   if (!chip) chip = "h1b3c";

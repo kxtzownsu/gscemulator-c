@@ -1,0 +1,25 @@
+BUNDLED_FIRMWARE ?= 1
+
+ifeq ($(BUNDLED_FIRMWARE),1)
+
+ifdef BUNDLED_CHIP
+BUNDLED_CHIPS := $(BUNDLED_CHIP)
+endif
+BUNDLED_CHIPS ?= H1B3C
+
+BUNDLED_H1B3C_BOOTROM_BIN ?= $(BUNDLED_BOOTROM_BIN)
+BUNDLED_H1B3C_FIRMWARE_BIN ?= $(BUNDLED_FIRMWARE_BIN)
+
+BUNDLED_BOOTROM_FOR = $(if $(BUNDLED_$(1)_BOOTROM_BIN),$(BUNDLED_$(1)_BOOTROM_BIN),$(PROJECT_DIR)/src/$(1)/firmware/bootrom.bin)
+BUNDLED_FIRMWARE_FOR = $(if $(BUNDLED_$(1)_FIRMWARE_BIN),$(BUNDLED_$(1)_FIRMWARE_BIN),$(PROJECT_DIR)/src/$(1)/firmware/firmware.bin)
+
+BUNDLED_ARGS := $(foreach chip,$(BUNDLED_CHIPS),--chip $(chip) --bootrom $(call BUNDLED_BOOTROM_FOR,$(chip)) --firmware $(call BUNDLED_FIRMWARE_FOR,$(chip)))
+BUNDLED_INPUTS := $(foreach chip,$(BUNDLED_CHIPS),$(call BUNDLED_BOOTROM_FOR,$(chip)) $(call BUNDLED_FIRMWARE_FOR,$(chip)))
+
+CPPFLAGS += -DBUNDLED_FIRMWARE
+
+$(BUNDLED_FIRMWARE_HEADER): $(BUNDLED_INPUTS)
+	@echo "  BUNDLE    $@"
+	$(Q)$(BASH) $(PROJECT_DIR)/scripts/generate_firmware_header.sh $(BUNDLED_ARGS) > $@
+
+endif

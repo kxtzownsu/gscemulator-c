@@ -54,7 +54,15 @@ static void load_image(const EssentialMemoryEntry *entry, bool bundled, const ui
     }
     LOG_VBS("Loaded bundled %s\n", label);
   } else {
-    FileRC frc = file_readbuf(path, buf, buf_len);
+    FileRC frc;
+
+    if (path == NULL || path[0] == '\0') {
+      LOG_ERR("No %s path and no bundled image\n", label);
+      free(buf);
+      emu_exit(RC_CHIPEMU_FAILED_INIT);
+    }
+
+    frc = file_readbuf(path, buf, buf_len);
     if (frc != FILE_SUCCESS) {
       LOG_ERR("Failed to load %s %s\n", label, path);
       free(buf);
