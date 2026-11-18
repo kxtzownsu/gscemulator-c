@@ -10,8 +10,9 @@ Copy this list into the task and tick each item.
 - [ ] `include/<CHIP>/memory.h` and `src/<CHIP>/memory.c`: essential memory table with region permissions and one ROM/firmware role each
 - [ ] `initialize` assigns `ctx.essential_memory`, calls `map_essential_memory()`, then calls `load_firmware()` before firmware writes
 - [ ] `initialize` calls `set_sp_pc()` with the chip VTOR base
+- [ ] `initialize` installs `install_memory_fault_hook()` after `uc_open`
 - [ ] `include/<CHIP>/register_map.h`: peripheral bases, sizes, 4-byte-aligned offsets
-- [ ] `src/<CHIP>/peripherals/`: components registered and mapped in `initialize_peripherals()`
+- [ ] `src/<CHIP>/peripherals/`: components registered and mapped in `initialize_peripherals()`, unknown offsets use `component_log_unhandled()`
 - [ ] `src/<CHIP>/firmware/{bootrom,firmware}.bin`: inputs present and the chip added to `BUNDLED_CHIPS`
 - [ ] backend uses `BUNDLED_<CHIP>_*` under `#ifdef BUNDLED_FIRMWARE` when bundled boot is supported
 - [ ] `src/main.c`: header included

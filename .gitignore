@@ -3,3 +3,5 @@ flash/
 *.bin
 include/common/bundled-firmware.h
 reference/
+
+third_party/unicorn

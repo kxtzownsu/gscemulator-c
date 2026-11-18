@@ -10,7 +10,6 @@ typedef struct {
 static FoobarState foobar_state;
 
 static uint64_t foobar_read(Component *self, uint64_t offset, unsigned size) {
-  (void)self;
   (void)size;
 
   switch (offset) {
@@ -21,7 +20,7 @@ static uint64_t foobar_read(Component *self, uint64_t offset, unsigned size) {
       LOG_ERR("FOOBAR: BAR is write-only\n");
       return 0;
     default:
-      LOG_ERR("FOOBAR: unhandled read at 0x%llx\n", (unsigned long long)offset);
+      component_log_unhandled(self, "read", offset);
       return 0;
   }
 }
@@ -40,7 +39,7 @@ static void foobar_write(Component *self, uint64_t offset, unsigned size, uint64
       LOG_VBS("FOOBAR: wrote BAR (size=%u) <- 0x%08x\n", size, state->bar);
       return;
     default:
-      LOG_ERR("FOOBAR: unhandled write at 0x%llx\n", (unsigned long long)offset);
+      component_log_unhandled(self, "write", offset);
       return;
   }
 }

@@ -44,6 +44,8 @@ A nested file should contain only module-specific rules and gotchas. Do not copy
 - `ctx.firmware` paths are fixed `char[MAX_FILE_PATH]` buffers with `useBundledROM`/`useBundledFW`; `main` fills them from `--bootrom`/`--firmware`. Copy CLI strings in with `snprintf` and reject truncation.
 - Each chip exposes an `EssentialMemoryEntry` table with an empty `NAME` terminator; mark one ROM and one firmware role, map it via `ctx.essential_memory` + `map_essential_memory` before flash writes, then call `load_firmware` to pre-fill and load the ROM/firmware regions.
 - `set_sp_pc(uc, vtor_base)` reads SP at offset `0x0` and PC at `0x4` and writes the ARM registers; it does not set the Thumb bit.
+- `install_memory_fault_hook` logs unmapped/protected memory reads, writes, and fetches with address and PC. Hook callbacks must not call `emu_exit` or `uc_close`.
+- `component_log_unhandled` logs an unknown MMIO offset with the component name, access type, and PC; use it in default register cases.
 - `make` defaults to `BUNDLED_FIRMWARE=1`, which adds `-DBUNDLED_FIRMWARE` and makes `include/common/bundled-firmware.h` a dependency. `BUNDLED_FIRMWARE=0` is the source-only build.
 - `BUNDLED_CHIPS` selects firmware pairs; the generated header defines `BUNDLED_<CHIP>_BOOTROM_BIN` and `BUNDLED_<CHIP>_FIRMWARE_BIN`.
 - Peripheral bases, sizes, and offsets live in `include/H1B3C/register_map.h`; MMIO handler offsets are relative to the region base.

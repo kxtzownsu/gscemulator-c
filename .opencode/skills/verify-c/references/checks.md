@@ -28,6 +28,7 @@ Use a longer run after parser rewrites, allocation changes, or new CLI syntax.
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/libargs.c -o /tmp/libargs.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/file.c -o /tmp/file.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/essential-memory.c -o /tmp/essential-memory.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/memory-fault.c -o /tmp/memory-fault.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/vtor.c -o /tmp/vtor.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/common/peripherals/component.c -o /tmp/component.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null

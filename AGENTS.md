@@ -94,11 +94,18 @@ Essential memory:
 - `load_firmware(bundled_rom, bundled_rom_len, bundled_fw, bundled_fw_len)` finds the ROM and firmware roles, pre-fills each destination region with `0xFF`, loads the image from its `ctx.firmware` path or the bundled array according to `useBundledROM`/`useBundledFW`, and writes it with `uc_mem_write`. Missing roles exit `RC_CHIPEMU_FAILED_INIT`.
 - Permissions use `UC_PROT_*`; H1B3C maps ROM RX, SRAM RW, INFO0/INFO1 RW, and PROG RWX. `Havn_Initialize` calls `load_firmware` with the `BUNDLED_H1B3C_*` arrays under `BUNDLED_FIRMWARE`, or NULLs for a source-only build.
 
+Memory faults:
+
+- `common/memory-fault.h` owns `install_memory_fault_hook`, which registers `UC_HOOK_MEM_{READ,WRITE,FETCH}_INVALID` on `ctx.uc`.
+- The hook logs `Unmapped` or `Protected`, the access type, address, size, write value, and PC. It returns; `uc_emu_start` still fails and the backend exits.
+- Install it after `uc_open` and before `uc_emu_start`. Never call `emu_exit` or `uc_close` from the hook.
+
 Peripherals:
 
 - `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`) and `MmioRegion` (`component`, `base`, `size`).
 - `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
 - `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`.
+- `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC. Use it in per-component default cases; never exit from a component callback.
 - `include/H1B3C/register_map.h` is the single source for peripheral bases, region sizes, and register offsets. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
 - Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
 - Never call `emu_exit` or `uc_close` from an MMIO callback. Log and return 0, or set a fault flag and call `uc_emu_stop` so cleanup happens after `uc_emu_start` returns.

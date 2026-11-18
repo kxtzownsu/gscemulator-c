@@ -31,6 +31,8 @@ void init_unicorn(void){
   }
 
   LOG_VBS("Set CPU to Cortex-M3\n");
+
+  install_memory_fault_hook();
 }
 
 void Havn_Initialize(void) {

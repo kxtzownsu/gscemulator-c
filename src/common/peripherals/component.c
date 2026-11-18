@@ -89,3 +89,16 @@ bool component_map_mmio(uc_engine *uc, const MmioRegion *regions, size_t count) 
 
   return true;
 }
+
+void component_log_unhandled(const Component *component, const char *access, uint64_t offset) {
+  uint32_t pc = 0xFFFFFFFF;
+
+  if (component == NULL) return;
+
+  if (ctx.uc != NULL && uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) {
+    pc = 0xFFFFFFFF;
+  }
+
+  LOG_ERR("Unhandled %s register 0x%llx in component %s at pc=0x%08x\n",
+          access, (unsigned long long)offset, component->name, pc);
+}

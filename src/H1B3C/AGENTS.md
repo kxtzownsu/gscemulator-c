@@ -9,6 +9,7 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - `H1B3C_EssentialMemoryArray` in `src/H1B3C/memory.c` lists ROM (RX), SRAM (RW), INFO0/INFO1 (RW), and PROG (RWX). ROM and PROG are marked `ESSENTIAL_MEMORY_ROM` and `ESSENTIAL_MEMORY_FIRMWARE`.
 - `Havn_Initialize` assigns the table to `ctx.essential_memory`, calls `map_essential_memory()`, then calls `load_firmware()` with the `BUNDLED_H1B3C_*` arrays under `BUNDLED_FIRMWARE` or NULLs for a source-only build. INFO1 remains a chip-local write.
 - `Havn_Initialize` calls `set_sp_pc(ctx.uc, FLASH_ROM_BASE)` after the flash writes. `set_sp_pc` sets SP/PC; `Havn_StartEmulation` sets the Thumb bit.
+- `init_unicorn` installs the memory fault hook after `uc_open` and the Cortex-M3 model setup, so unmapped/protected accesses log the address, access type, and PC.
 - `ctx.firmware.progfw` / `--firmware` is stored but H1B3C does not load it yet. Wire it when firmware loading lands.
 - Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set.
 - Register bases, region sizes, and offsets belong in `include/H1B3C/register_map.h`. Keep offsets 4-byte aligned.

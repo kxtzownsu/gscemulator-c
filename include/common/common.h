@@ -9,6 +9,7 @@
 #include <common/exit.h>
 #include <common/file.h>
 #include <common/logger.h>
+#include <common/memory-fault.h>
 #include <common/rc.h>
 #include <common/vtor.h>
 
