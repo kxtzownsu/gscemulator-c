@@ -16,7 +16,10 @@ TARGET := $(BUILD_DIR)/gscemu
 SRCS := $(filter-out $(SRC_DIR)/H1B3C/firmware/%,$(shell find $(SRC_DIR) -name '*.c'))
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
+BUILD_CONFIG := $(BUILD_DIR)/.build-config
+VERSION_HEADER := $(INCLUDE_DIR)/common/version.h
 BUNDLED_FIRMWARE_HEADER := $(INCLUDE_DIR)/common/bundled-firmware.h
+CHIPS := h1b3c
 
 ## fuzz ##
 FUZZ_TIME ?= 60

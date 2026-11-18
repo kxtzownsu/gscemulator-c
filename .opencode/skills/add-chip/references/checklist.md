@@ -13,7 +13,7 @@ Copy this list into the task and tick each item.
 - [ ] `initialize` installs `install_memory_fault_hook()` after `uc_open`
 - [ ] `include/<CHIP>/register_map.h`: peripheral bases, sizes, 4-byte-aligned offsets
 - [ ] `src/<CHIP>/peripherals/`: components registered and mapped in `initialize_peripherals()`, unknown offsets use `component_log_unhandled()`
-- [ ] `src/<CHIP>/firmware/{bootrom,firmware}.bin`: inputs present and the chip added to `BUNDLED_CHIPS`
+- [ ] `src/<CHIP>/firmware/{bootrom,firmware}.bin`: inputs present and the chip added to `BUNDLED_CHIPS` and `CHIPS`
 - [ ] backend uses `BUNDLED_<CHIP>_*` under `#ifdef BUNDLED_<CHIP>` and sets `useBundledROM`/`useBundledFW` for empty paths
 - [ ] `src/main.c`: header included
 - [ ] `src/main.c`: `get_chipemu` case fills `ctx.chipemu` with all three pointers

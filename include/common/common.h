@@ -13,4 +13,6 @@
 #include <common/rc.h>
 #include <common/vtor.h>
 
+void print_version(void);
+
 #endif /* COMMON_COMMON_H */

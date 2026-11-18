@@ -8,6 +8,7 @@ include scripts/make/variables.mk
 include scripts/make/setup.mk
 include scripts/make/firmware.mk
 include scripts/make/unicorn.mk
+include scripts/make/version.mk
 include scripts/make/flags.mk
 include scripts/make/build.mk
 include scripts/make/fuzz.mk

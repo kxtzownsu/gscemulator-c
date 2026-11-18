@@ -14,6 +14,7 @@ make BUNDLED_FIRMWARE=0
 BIN="build/$(uname -m)/gscemu"
 
 "$BIN" --help >/dev/null
+"$BIN" --version | grep -q '^Chips:'
 if "$BIN" >/dev/null 2>&1; then
   echo "verify-c: run without --bootrom unexpectedly succeeded" >&2
   exit 1
@@ -48,6 +49,8 @@ if command -v gcc >/dev/null 2>&1; then
     -c src/common/essential-memory.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/common/memory-fault.c -o "$TMP_O"
+  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
+    -c src/common/version.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
     -c src/common/vtor.c -o "$TMP_O"
   gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \

@@ -16,6 +16,8 @@ ifeq ($(STATIC),1)
 $(TARGET): $(UNICORN_STATIC_LIB)
 endif
 
+$(OBJS): $(BUILD_CONFIG)
+
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@echo "  CC        $<"
 	$(Q)$(MKDIR) -p $(dir $@)

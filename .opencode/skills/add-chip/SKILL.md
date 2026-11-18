@@ -37,7 +37,7 @@ Only H1B3C is implemented. The help text lists future chips, but they have no ba
 8. Call `install_memory_fault_hook()` after `uc_open` so unmapped/protected accesses identify the address, access type, and PC.
 9. Add `include/<CHIP>/register_map.h` for peripheral bases, sizes, and 4-byte-aligned register offsets.
 10. Add `src/<CHIP>/peripherals/` components and wire `initialize_peripherals()` with `component_register` and `component_map_mmio`; use `component_log_unhandled()` in default register cases.
-11. Add `src/<CHIP>/firmware/{bootrom,firmware}.bin`, add the chip to `BUNDLED_CHIPS`, and include the `BUNDLED_<CHIP>_*` arrays under `#ifdef BUNDLED_<CHIP>` when bundled boot is supported. The generated header emits `BUNDLED_<CHIP>`.
+11. Add `src/<CHIP>/firmware/{bootrom,firmware}.bin`, add the chip to `BUNDLED_CHIPS` and `CHIPS` (`scripts/make/variables.mk`), and include the `BUNDLED_<CHIP>_*` arrays under `#ifdef BUNDLED_<CHIP>` when bundled boot is supported. The generated header emits `BUNDLED_<CHIP>`.
 12. Extend chip string parsing in `main.c`, update the `--chip` help text, and keep the default at `h1b3c`.
 13. Add the lowercase chip name to `tests/fuzz.dict`.
 14. Verify with `make clean && make BUNDLED_FIRMWARE=0` (or plain `make` with firmware inputs), `--chip <name> -r <bootrom> -v`, an invalid chip, and `make fuzz FUZZ_TIME=1`.

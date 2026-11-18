@@ -5,6 +5,7 @@
 "-r"
 "--verbose"
 "-v"
+"--version"
 "--output"
 "-o"
 "--name"

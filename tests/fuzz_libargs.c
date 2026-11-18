@@ -45,6 +45,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   const char *name;
   int verbose;
   int debug;
+  int version;
   size_t sink = 0;
 
   buf = malloc(size + 1);
@@ -73,12 +74,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   name = argcheck_fequals_str(ac, "--name", "-n", "Name");
   verbose = argcheck_fbool(ac, "--verbose", "-v", "Verbose");
   debug = argcheck_fbool(ac, "--debug", NULL, "Debug");
+  version = argcheck_fbool(ac, "--version", NULL, "Version");
 
   if (chip) sink += strlen(chip);
   if (bootrom) sink += strlen(bootrom);
   if (output) sink += strlen(output);
   if (name) sink += strlen(name);
-  sink += (size_t)verbose + (size_t)debug;
+  sink += (size_t)verbose + (size_t)debug + (size_t)version;
   sink += (size_t)argcheck_flag_count(ac);
   (void)sink;
 

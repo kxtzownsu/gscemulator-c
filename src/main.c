@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
   const char *rom_path;
   const char *fw_path;
   int path_len;
+  int show_version;
 
   ctx_init();
 
@@ -33,6 +34,12 @@ int main(int argc, char **argv) {
   rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Overrides bundled BootROM binary for specified chip)");
   fw_path = argcheck_fequals(ctx.ac, "--firmware", "-f", "Firmware binary to use (Overrides bundled firmware binary for specified chip)");
   ctx.verbose = argcheck_fbool(ctx.ac, "--verbose", "-v", "Verbose output");
+  show_version = argcheck_fbool(ctx.ac, "--version", NULL, "Show version information");
+
+  if (show_version) {
+    print_version();
+    emu_exit(RC_SUCCESS);
+  }
 
   argcheck_check_help(ctx.ac);
 
