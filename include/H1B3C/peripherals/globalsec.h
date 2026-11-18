@@ -1,0 +1,11 @@
+#ifndef H1B3C_PERIPHERALS_GLOBALSEC_H
+#define H1B3C_PERIPHERALS_GLOBALSEC_H
+
+#include <common/peripherals/component.h>
+
+#define REG_GLOBALSEC_BASE_ADDR 0x40090000
+#define REG_GLOBALSEC_ALERT_CONTROL_OFFSET 0x405C
+
+Component *GLOBALSEC_Initialize(void);
+
+#endif /* H1B3C_PERIPHERALS_GLOBALSEC_H */
