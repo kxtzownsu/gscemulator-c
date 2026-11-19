@@ -12,7 +12,8 @@ void initialize_peripherals(void) {
   Component *TRNG = TRNG_Initialize();
   Component *SWDP = SWDP_Initialize();
   Component *XO = XO_Initialize();
-  Component *GPIO = GPIO_Initialize();
+  Component *GPIO0 = GPIO_Initialize(0);
+  Component *GPIO1 = GPIO_Initialize(1);
   Component *KEYMGR = KEYMGR_Initialize();
   Component *FLASH = FLASH_Initialize();
   Component *USB = USB_Initialize();
@@ -26,7 +27,8 @@ void initialize_peripherals(void) {
     { .component = TRNG, .base = REG_TRNG_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = SWDP, .base = REG_SWDP_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = XO, .base = REG_XO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = GPIO, .base = REG_GPIO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = GPIO0, .base = REG_GPIO0_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = GPIO1, .base = REG_GPIO1_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = KEYMGR, .base = REG_KEYMGR_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = FLASH, .base = REG_FLASH_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = USB, .base = REG_USB_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
@@ -42,7 +44,8 @@ void initialize_peripherals(void) {
       TRNG == NULL ||
       SWDP == NULL ||
       XO == NULL ||
-      GPIO == NULL ||
+      GPIO0 == NULL ||
+      GPIO1 == NULL ||
       KEYMGR == NULL ||
       FLASH == NULL ||
       USB == NULL

@@ -49,15 +49,17 @@ RANGES = [
      lambda name: re.fullmatch(r"SHA_KEY_W\d+", name) is not None),
     ("FLASH", "REG_FLASH_WR_DATA0_OFFSET", "REG_FLASH_WR_DATA_COUNT",
      lambda name: re.fullmatch(r"FSH_WR_DATA\d+", name) is not None),
+    ("GPIO", "REG_GPIO_MASKLOWBYTE_OFFSET", "REG_GPIO_MASK_COUNT",
+     lambda name: name.startswith("MASKLOWBYTE_")),
+    ("GPIO", "REG_GPIO_MASKHIGHBYTE_OFFSET", "REG_GPIO_MASK_COUNT",
+     lambda name: name.startswith("MASKHIGHBYTE_")),
     ("PINMUX", None, "REG_PINMUX_REG_COUNT", lambda name: True),
 ]
 
 DEFINE_RE = re.compile(r"#define\s+([A-Z0-9_]+)\s+(0x[0-9a-fA-F]+|\d+)")
 OFFSET_RE = re.compile(r"^REG_([A-Z0-9]+)_([A-Z0-9_]+)_OFFSET$")
 
-KNOWN_GAPS = [
-    "GPIO1 at 0x40210000 is not mapped; the single GPIO component covers bank 0",
-]
+KNOWN_GAPS = []
 
 
 def repo_root() -> Path:
@@ -153,7 +155,12 @@ def main() -> int:
     init_text = (root / "src/H1B3C/peripherals/_init.c").read_text()
     mapped = set()
     for var, base_macro, size_macro in mapping_re.findall(init_text):
-        component = "FUSE" if var == "eFuses" else var.upper()
+        if var == "eFuses":
+            component = "FUSE"
+        elif var in ("GPIO0", "GPIO1"):
+            component = "GPIO"
+        else:
+            component = var.upper()
         mapped.add(component)
         if base_macro not in values:
             errors.append(f"{component}: unknown base macro {base_macro}")
