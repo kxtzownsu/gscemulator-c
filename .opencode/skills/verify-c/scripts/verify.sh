@@ -52,6 +52,7 @@ if command -v gcc >/dev/null 2>&1; then
     src/common/file.c \
     src/common/essential-memory.c \
     src/common/memory-fault.c \
+    src/common/sha256.c \
     src/common/version.c \
     src/common/vtor.c \
     src/common/peripherals/component.c \
@@ -66,7 +67,11 @@ if command -v gcc >/dev/null 2>&1; then
     src/H1B3C/peripherals/pinmux.c \
     src/H1B3C/peripherals/uart.c \
     src/H1B3C/peripherals/trng.c \
-    src/H1B3C/peripherals/swdp.c; do
+    src/H1B3C/peripherals/swdp.c \
+    src/H1B3C/peripherals/xo.c \
+    src/H1B3C/peripherals/gpio.c \
+    src/H1B3C/peripherals/keymgr.c \
+    src/H1B3C/peripherals/flash.c; do
     "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
   done
 fi

@@ -10,9 +10,9 @@
 - With `BUNDLED_FIRMWARE=0`, `./build/$(uname -m)/gscemu` without `-r` exits with `RC_CHIPEMU_FAILED_INIT` (252).
 - `./build/$(uname -m)/gscemu --console bogus` exits with `RC_ARG_CONSOLE_INVALID` (244).
 - If the header defines `BUNDLED_H1B3C`, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN`; otherwise it exits 252. The exit status depends on the bundled image.
-- `./build/$(uname -m)/gscemu -r <bootrom> -v` runs the H1B3C lifecycle and prints verbose logs prefixed with the thread role (`[emu]`, `[UART]`, `[TRNG]`, `[control]`, ...). PMU is inline and logs as `[emu]`; UART and TRNG are the workers today.
-- A default build has 4 tasks (control, emu, UART, TRNG); `--console pts` adds the console task; `make SINGLE_THREAD=1` has 1.
-- The current H1B3C boot prints the full `Havn2|...` banner and stops on the unhandled GLOBALSEC write at `0x40090130` with status 246.
+- `./build/$(uname -m)/gscemu -r <bootrom> -v` runs the H1B3C lifecycle and prints verbose logs prefixed with the thread role (`[emu]`, `[UART]`, `[TRNG]`, `[KEYMGR]`, `[control]`, ...). PMU is inline and logs as `[emu]`; UART, TRNG, and KEYMGR are the workers today.
+- A default build has 5 tasks (control, emu, UART, TRNG, KEYMGR); `--console pts` adds the console task; `make SINGLE_THREAD=1` has 1.
+- The current H1B3C boot prints the banner, `exp ?36`, `Himg`/`Hfss`/`Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then stops on the unhandled PMU read at `0x4000000C` with status 246.
 - `./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>` prints the pty slave path and relays stdin/stdout through it.
 - `make SINGLE_THREAD=1` runs emulation inline on the control thread and rejects `--console pts` with 244.
 - `make tsan` builds and the boot smoke test produces no ThreadSanitizer report.
@@ -37,6 +37,7 @@ gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/libar
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/file.c -o /tmp/file.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/essential-memory.c -o /tmp/essential-memory.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/memory-fault.c -o /tmp/memory-fault.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/sha256.c -o /tmp/sha256.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/version.c -o /tmp/version.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/vtor.c -o /tmp/vtor.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/peripherals/component.c -o /tmp/component.o
@@ -52,6 +53,10 @@ gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/uart.c -o /tmp/uart.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/trng.c -o /tmp/trng.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/swdp.c -o /tmp/swdp.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/xo.c -o /tmp/xo.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/gpio.c -o /tmp/gpio.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/keymgr.c -o /tmp/keymgr.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/flash.c -o /tmp/flash.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 

@@ -16,6 +16,7 @@ Public headers. They define the contract for `src/`.
 - `common/runtime/worker.h` owns `Worker`, `WorkerOp`, `worker_start`, `worker_stop`, `worker_read`, and `worker_write`. Reads and default writes are synchronous; async writes are opt-in.
 - `common/runtime/console.h` owns `console_start` / `console_stop` and the stdio pumps used by the control poll loop. One thread owns the pty master.
 - `common/vtor.h` owns `set_sp_pc`. It takes the engine and vector-table base so chip callers stay in control of the address.
+- `common/sha256.h` owns the `Sha256Context` API used by the KEYMGR SHA engine. Keep it dependency-free and chip-agnostic.
 - `common/ctx.h` declares the global `Ctx ctx` container and `ctx_init`. Keep it a plain data struct; resource ownership stays with the code that created the resource, and `ctx.verbose` is the only verbose switch. `ctx.firmware` holds the fixed `char[MAX_FILE_PATH]` paths plus the `useBundledROM`/`useBundledFW` flags; `main` fills them from `--bootrom`/`--firmware` and the backend decides whether to read a file or use the bundled arrays. Copy CLI strings in, never store `ArgCheck` pointers.
 - `common/emulator.h` owns `Emulator` and `EmulatorChips`. Keep them chip-agnostic. Adding a field or changing a function pointer signature requires updating every backend and `get_chipemu`.
 - `common/exit.h` exposes `emu_exit`; it must stay `ARGCHECK_NORETURN` and control-thread-only.

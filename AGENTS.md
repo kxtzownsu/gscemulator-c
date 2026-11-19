@@ -121,7 +121,7 @@ Peripherals:
 
 - `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`, `worker`) and `MmioRegion` (`component`, `base`, `size`).
 - `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
-- `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. UART and TRNG are the threaded peripherals today; PMU and the rest are inline.
+- `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. UART, TRNG, and KEYMGR are the threaded peripherals today; PMU and the rest are inline.
 - `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`. A threaded component's handlers run on its worker; everything else runs inline on the emulation thread.
 - `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC, then calls `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)`. On a worker it uses `tctx.mmio_pc`; it never reads unicorn from a worker and never calls `emu_exit`.
 - `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the MMIO region size. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
@@ -135,7 +135,7 @@ Threads:
 - T0 control is the main thread. It owns CLI/init, `ctx.ac`, stdio, signal handling, and teardown. Only T0 may call `emu_exit`, `uc_close`, `argcheck_destroy`, or `exit`.
 - T1 emulation owns `ctx.uc` and runs `ctx.chipemu.start_emulation()`. Runtime errors call `runtime_fault()` and return; they never exit from T1.
 - T2 console runs only with `--console pts`. It owns the pty master and the console/UART relay and never touches unicorn. Default console is `none` until UART exists.
-- T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART and TRNG opt in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
+- T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART, TRNG, and KEYMGR opt in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
 - `common/runtime/control.h` owns `Runtime`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is callable from any thread; `runtime_run` tears down in the order stop T1/join, stop workers, stop console, `emu_exit`.
 - `common/runtime/thread.h` owns `ThreadCtx tctx` (role, name, worker/component, `mmio_pc`). It is thread-local labels and scratch only. Never store `ctx.uc`, `ctx.ac`, or the component array in it.
 - `common/runtime/worker.h` owns the worker queue and `worker_read` / `worker_write`.
@@ -234,12 +234,12 @@ For a bundled build, provide `src/<CHIP>/firmware/{bootrom,firmware}.bin` or the
 Thread/console smoke checks:
 
 ```bash
-./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu/UART/TRNG tasks
+./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu/UART/TRNG/KEYMGR tasks
 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must stop at the same register/fault address and status as the pre-change build (currently GLOBALSEC `0x130` at `0x40090130`, status 246, after printing the full `Havn2|...` banner).
+The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then stop on the unhandled PMU read at `0x4000000C` with status 246.
 
 Pick the smallest set that fits the change:
 
