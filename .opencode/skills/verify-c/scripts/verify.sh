@@ -65,7 +65,8 @@ if command -v gcc >/dev/null 2>&1; then
     src/H1B3C/peripherals/pmu.c \
     src/H1B3C/peripherals/pinmux.c \
     src/H1B3C/peripherals/uart.c \
-    src/H1B3C/peripherals/trng.c; do
+    src/H1B3C/peripherals/trng.c \
+    src/H1B3C/peripherals/swdp.c; do
     "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
   done
 fi

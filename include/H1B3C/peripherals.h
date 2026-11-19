@@ -8,6 +8,7 @@
 #include <H1B3C/peripherals/pinmux.h>
 #include <H1B3C/peripherals/uart.h>
 #include <H1B3C/peripherals/trng.h>
+#include <H1B3C/peripherals/swdp.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 
