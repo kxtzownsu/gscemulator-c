@@ -12,5 +12,6 @@
 #define REG_M3_ITCMCR_OFFSET 0xEF90
 
 Component *M3_Initialize(void);
+void M3_StartCycleCount(void);
 
 #endif /* H1B3C_PERIPHERALS_M3_H */

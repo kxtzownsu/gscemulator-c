@@ -115,6 +115,8 @@ void Havn_StartEmulation(void) {
 
   LOG_VBS("Starting emulation at PC=0x%08x and SP=0x%08x\n", pc, sp);
 
+  M3_StartCycleCount();
+
   err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
 
   if (memory_fault_occurred()) {
