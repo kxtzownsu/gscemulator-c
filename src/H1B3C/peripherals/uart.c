@@ -1,5 +1,6 @@
 #include <H1B3C/peripherals/uart.h>
 #include <H1B3C/peripherals/m3.h>
+#include <H1B3C/rma.h>
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -25,12 +26,11 @@ typedef struct {
 
 static UartState uarts[3];
 
-#define UART_RMA_LINE_SIZE 256
+#define UART_RMA_LINE_SIZE 64
 
 typedef struct {
   char line[UART_RMA_LINE_SIZE];
   size_t length;
-  bool waiting;
 } UartRmaScanner;
 
 static UartRmaScanner rma_scanner;
@@ -47,12 +47,7 @@ static void uart_scan_rma_byte(uint8_t byte) {
 
   rma_scanner.line[rma_scanner.length] = '\0';
 
-  if (!rma_scanner.waiting) {
-    if (strcmp(rma_scanner.line, "generated challenge:") == 0) rma_scanner.waiting = true;
-  } else if (rma_scanner.length != 0) {
-    LOG("\nRMA challenge: %s\n", rma_scanner.line);
-    rma_scanner.waiting = false;
-  }
+  if (strcmp(rma_scanner.line, "generated challenge:") == 0) RMA_ChallengeSeen();
 
   rma_scanner.length = 0;
 }

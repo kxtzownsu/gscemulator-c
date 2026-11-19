@@ -10,6 +10,7 @@
 #include <common/common.h>
 #include <common/logger.h>
 #include <common/peripherals/define.h>
+#include <common/runtime/control.h>
 
 #define USB_IRQ 193
 #define USB_MAX_PACKET 64
@@ -689,7 +690,6 @@ static void usb_handle_setup(const uint8_t setup[8]) {
 
 static void usb_handle_ep_out(uint8_t address, const uint8_t *data, size_t len) {
   unsigned endpoint = address & 0x7Fu;
-  static bool post_reset_logged;
 
   if (endpoint == 0 || endpoint >= USB_ENDPOINTS) return;
 
@@ -700,11 +700,6 @@ static void usb_handle_ep_out(uint8_t address, const uint8_t *data, size_t len) 
 
   if (!usb_out_append(endpoint, data, len)) return;
   if (usb_state.out_enabled[endpoint]) usb_drain_out(endpoint);
-
-  if (usb_state.post_reset_pending && !post_reset_logged) {
-    post_reset_logged = true;
-    LOG("USB: CCD post-reset requested; guest reboot is not wired up yet\n");
-  }
 }
 
 static void usb_handle_ep_in_done(uint8_t address) {
@@ -720,6 +715,8 @@ static void usb_handle_ep_in_done(uint8_t address) {
 
   if (endpoint == 4 && usb_state.post_reset_pending) {
     usb_state.post_reset_pending = false;
+    LOG("USB: CCD post-reset requested, rebooting\n");
+    runtime_request_reboot();
   }
 }
 

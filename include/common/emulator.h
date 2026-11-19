@@ -10,6 +10,7 @@ struct Emulator {
   void (*initialize)(void);
   void (*start_emulation)(void);
   void (*end_emulation)(void);
+  void (*reboot)(void);
 };
 
 typedef enum {

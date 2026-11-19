@@ -83,6 +83,8 @@ CLI:
 - `--verbose` / `-v` enables verbose logging.
 - `--wait-for-enter` waits on T0 for an ENTER on stdin before starting emulation. Start the console first so the pty path is printed; the prompt goes through `LOG`.
 - `--disable-tpm-chardev` and `--disable-usb-proxy` skip the corresponding privileged proxy. By default, when `geteuid() == 0`, the emulator checks `tpm_vtpm_proxy` + `/dev/vtpmx` and `dummy_hcd` + `raw_gadget` + `/dev/raw-gadget` + `dummy_udc.0`, asks for ENTER to continue when a dependency is missing, and starts `vtpm-proxy` and `usb-proxy`. Non-root runs never start or check them. `vtpm-proxy` creates `/dev/tpmN` through `/dev/vtpmx` and forwards TPM commands over the SPS slave transport; `usb-proxy` binds `/dev/raw-gadget` to `dummy_udc.0` and exposes the emulated DWC OTG controller as CCD USB `18d1:5014`.
+- `--flash_dir DIR` overrides the default persistent flash directory. The default is `$HOME/.local/share/gscemu-c/flash`, holding `info0.bin`, `info1.bin`, and `prog.bin`; missing files are created from the chip defaults.
+- `--no-persist` disables flash files entirely. The emulator uses the default INFO0/INFO1/PROG contents and never reads or writes the flash directory.
 - `--console none|pts` selects console output. In multi-threaded builds the default is `pts` when stdin is a TTY and `none` otherwise; `--console none` always disables it. `pts` creates a pty, prints its slave path, and routes UART through it. T0 owns stdio: it writes stdin to the slave and copies slave output to stdout. UART reads and writes the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
 - `--version` prints the build version and exits 0. The output includes the program name, `0.1.0-<commit>[-dirty]`, toolchain, unicorn version/commit, build date/unix timestamp, available chips, and bundled firmware.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
@@ -157,16 +159,17 @@ Threads:
 
 Emulator:
 
-- `get_chipemu(chip)` fills `ctx.chipemu` with `initialize`, `start_emulation`, and `end_emulation`.
+- `get_chipemu(chip)` fills `ctx.chipemu` with `initialize`, `start_emulation`, `end_emulation`, and `reboot`.
 - `initialize()` must set `ctx.chipemu.ready = true` only after successful setup. `main` exits when `ready` is false. It runs on T0, so init failures may still call `emu_exit`.
-- `start_emulation()` and `end_emulation()` take no arguments and use `ctx`. `start_emulation` runs on T1, reports failures with `runtime_fault`, and returns. `end_emulation` runs on T0 after T1 and the workers have stopped, and must tolerate a partially initialized backend.
+- `start_emulation()`, `end_emulation()`, and `reboot()` take no arguments and use `ctx`. `start_emulation` runs on T1, reports failures with `runtime_fault`, and returns. `end_emulation` runs on T0 after T1 and the workers have stopped, and must tolerate a partially initialized backend. `reboot` runs on T0 after T1 has stopped and the chip backend has saved any persistent flash; it tears down and reinitializes the chip so `runtime_run` can start T1 again.
 - `start_emulation()` checks `memory_fault_occurred()` after `uc_emu_start` and reports `RC_CHIPEMU_MEMORY_FAULT` when the hook recorded an unmapped or protected access.
 - `set_sp_pc(uc, vtor_base)` reads SP from `vtor_base + 0x0` and PC from `vtor_base + 0x4`, writes `UC_ARM_REG_SP`/`UC_ARM_REG_PC`, and exits with the VTOR `RC_*` codes on read failure. It does not set the Thumb bit; `start_emulation` does.
 - `emu_exit(Rc rc)` is `_Noreturn` and control-thread-only (debug assert). It stops workers and the console, calls `end_emulation` when one is set, destroys `ctx.ac`, and exits with `rc`. It clears `ctx.chipemu.end_emulation` and `ctx.ac` before running them, so a nested `emu_exit` cannot double-close or double-free. Never call `exit()` directly.
 
 Context:
 
-- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, `essential_memory`, `firmware`, `components`, and `verbose`.
+- `common/ctx.h` exposes one global `Ctx ctx` holding `ac`, `chip`, `chipemu`, `uc`, `essential_memory`, `firmware`, `components`, `flash_dir`, `persist_flash`, and `verbose`.
+- `ctx.flash_dir` and `ctx.persist_flash` come from `--flash_dir`/`--no-persist` and the default `$HOME` path. The chip backend owns the region files and saves them before shutdown or reboot.
 - `ctx.firmware` holds `bootrom`, `progfw`, `infobnk`, and the `useBundledROM`/`useBundledFW` flags. `main` fills the paths and flags from `--bootrom`/`--firmware`; the backend decides whether to read a file or use the bundled arrays.
 - `ctx_init` zeroes the container; `main` calls it before touching anything else.
 - `ctx.verbose` is the only verbose switch. `LOG_VBS` reads it; do not add a second flag.

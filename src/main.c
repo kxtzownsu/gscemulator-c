@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -14,6 +15,7 @@ static void get_chipemu(EmulatorChips chip) {
       ctx.chipemu.initialize = Havn_Initialize;
       ctx.chipemu.start_emulation = Havn_StartEmulation;
       ctx.chipemu.end_emulation = Havn_EndEmulation;
+      ctx.chipemu.reboot = Havn_Reboot;
       return;
     default:
       emu_exit(RC_CHIPEMU_UNSUPPORTED);
@@ -25,7 +27,10 @@ int main(int argc, char **argv) {
   const char *rom_path;
   const char *fw_path;
   const char *console_arg;
+  const char *flash_dir_arg;
+  const char *home;
   int path_len;
+  int no_persist;
   int show_version;
   int wait_for_enter;
   int disable_tpm;
@@ -34,6 +39,18 @@ int main(int argc, char **argv) {
 
   ctx_init();
   runtime_init();
+
+  ctx.persist_flash = true;
+  home = getenv("HOME");
+
+  if (home != NULL && home[0] != '\0') {
+    path_len = snprintf(ctx.flash_dir, sizeof(ctx.flash_dir),
+                        "%s/.local/share/gscemu-c/flash", home);
+
+    if (path_len < 0 || path_len >= (int)sizeof(ctx.flash_dir)) ctx.persist_flash = false;
+  } else {
+    ctx.persist_flash = false;
+  }
 
   ctx.ac = argcheck_new(argc, argv);
   if (!ctx.ac) emu_exit(RC_ARGCHECK_FAILED);
@@ -44,6 +61,10 @@ int main(int argc, char **argv) {
   rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Overrides bundled BootROM binary for specified chip)");
   fw_path = argcheck_fequals(ctx.ac, "--firmware", "-f", "Firmware binary to use (Overrides bundled firmware binary for specified chip)");
   console_arg = argcheck_fequals(ctx.ac, "--console", NULL, "Console output [ none | pts ]");
+  flash_dir_arg = argcheck_fequals(ctx.ac, "--flash_dir", NULL,
+                                   "Directory for persisted flash images");
+  no_persist = argcheck_fbool(ctx.ac, "--no-persist", NULL,
+                              "Do not read or write persisted flash");
   ctx.verbose = argcheck_fbool(ctx.ac, "--verbose", "-v", "Verbose output");
   show_version = argcheck_fbool(ctx.ac, "--version", NULL, "Show version information");
   wait_for_enter = argcheck_fbool(ctx.ac, "--wait-for-enter", NULL,
@@ -59,6 +80,18 @@ int main(int argc, char **argv) {
   }
 
   argcheck_check_help(ctx.ac);
+
+  if (flash_dir_arg != NULL && flash_dir_arg[0] != '\0') {
+    path_len = snprintf(ctx.flash_dir, sizeof(ctx.flash_dir), "%s", flash_dir_arg);
+
+    if (path_len < 0 || path_len >= (int)sizeof(ctx.flash_dir)) {
+      emu_exit(RC_ARG_PATH_TOO_LONG);
+    }
+
+    if (!no_persist) ctx.persist_flash = true;
+  }
+
+  if (no_persist) ctx.persist_flash = false;
 
   if (console_arg == NULL) {
 #ifdef SINGLE_THREAD

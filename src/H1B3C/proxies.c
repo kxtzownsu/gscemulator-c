@@ -21,6 +21,10 @@ void H1B3C_StartProxies(bool disable_tpm, bool disable_usb) {
   LOG_VBS("Proxies are disabled in SINGLE_THREAD builds\n");
 }
 
+void H1B3C_RestartUSBProxy(void) {}
+void H1B3C_SuspendUSBProxy(void) {}
+void H1B3C_ResumeUSBProxy(void) {}
+
 void H1B3C_StopProxies(void) {}
 
 #else
@@ -90,6 +94,29 @@ void H1B3C_StartProxies(bool disable_tpm, bool disable_usb) {
       LOG_ERR("Failed to start usb-proxy\n");
     }
   }
+}
+
+void H1B3C_SuspendUSBProxy(void) {
+  if (!usb_proxy_started) return;
+
+  USB_ProxyStop();
+}
+
+void H1B3C_ResumeUSBProxy(void) {
+  if (!usb_proxy_started) return;
+
+  if (USB_ProxyStart()) {
+    GPIO_SetInputOverride(0, 5, false);
+    LOG("usb-proxy restarted\n");
+  } else {
+    usb_proxy_started = false;
+    LOG_ERR("Failed to restart usb-proxy\n");
+  }
+}
+
+void H1B3C_RestartUSBProxy(void) {
+  H1B3C_SuspendUSBProxy();
+  H1B3C_ResumeUSBProxy();
 }
 
 void H1B3C_StopProxies(void) {

@@ -5,6 +5,7 @@
 
 #include <common/logger.h>
 #include <common/peripherals/define.h>
+#include <common/runtime/control.h>
 
 DEFINE_BASIC_REGISTER(sw_pdb)
 DEFINE_BASIC_REGISTER(sw_pdb_secure)
@@ -13,6 +14,7 @@ DEFINE_BASIC_REGISTER(exitpd_mask)
 
 #define PMU_PERIPH_CLOCK_COUNT 48
 #define PMU_CHIP_ID_VALUE 0x4485694Du
+#define PMU_GLOBAL_RESET_KEY 0x7041776u
 
 static const BasicRegister pmu_registers[] = {
   BASIC_REGISTER_ENTRY(REG_PMU_SW_PDB_OFFSET, sw_pdb),
@@ -152,6 +154,9 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
     case REG_PMU_CLRRST_OFFSET:
       LOG_VBS("PMU: read CLRRST (size=%u) -> 0\n", size);
       return 0;
+    case REG_PMU_GLOBAL_RESET_OFFSET:
+      LOG_VBS("PMU: read GLOBAL_RESET (size=%u) -> 0\n", size);
+      return 0;
     case REG_PMU_INT_ENABLE_OFFSET:
       LOG_VBS("PMU: read INT_ENABLE (size=%u) -> %u\n", size, int_enable);
       return int_enable;
@@ -259,6 +264,14 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
     case REG_PMU_CLRRST_OFFSET:
       if (value != 0) rstsrc = 0;
       LOG_VBS("PMU: wrote CLRRST (size=%u) <- 0x%08x\n", size, (uint32_t)value);
+      return;
+    case REG_PMU_GLOBAL_RESET_OFFSET:
+      if ((uint32_t)value == PMU_GLOBAL_RESET_KEY) {
+        LOG("PMU: global reset requested\n");
+        runtime_request_reboot();
+      } else {
+        LOG_VBS("PMU: ignored GLOBAL_RESET write 0x%08x\n", (uint32_t)value);
+      }
       return;
     case REG_PMU_INT_ENABLE_OFFSET:
       int_enable = value != 0;

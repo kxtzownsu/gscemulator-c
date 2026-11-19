@@ -28,6 +28,8 @@ typedef struct {
   Firmware firmware;
   Component components[COMPONENT_MAX];
   size_t component_count;
+  char flash_dir[MAX_FILE_PATH];
+  bool persist_flash;
   bool verbose;
 } Ctx;
 

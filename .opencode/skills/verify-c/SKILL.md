@@ -29,7 +29,7 @@ BIN="build/$(uname -m)/gscemu"
 "$BIN" --version
 "$BIN" || true                    # exits 252 without --bootrom
 "$BIN" --console bogus || true    # exits 244
-timeout -s INT 20 "$BIN" -r <bootrom> -f <firmware>   # expect Inits done, 124/245
+timeout -s INT 20 "$BIN" --no-persist -r <bootrom> -f <firmware>   # expect Inits done, 124/245
 "$BIN" --chip invalid || true
 make fuzz FUZZ_TIME=1
 ```

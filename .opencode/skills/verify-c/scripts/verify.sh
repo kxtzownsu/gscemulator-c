@@ -27,7 +27,7 @@ fi
 
 if [ -n "${VERIFY_BOOTROM:-}" ] && [ -n "${VERIFY_FIRMWARE:-}" ]; then
   set +e
-  timeout -s INT 20 "$BIN" -r "$VERIFY_BOOTROM" -f "$VERIFY_FIRMWARE" >"$TMP_O" 2>&1
+  timeout -s INT 20 "$BIN" --no-persist -r "$VERIFY_BOOTROM" -f "$VERIFY_FIRMWARE" >"$TMP_O" 2>&1
   boot_rc=$?
   set -e
 

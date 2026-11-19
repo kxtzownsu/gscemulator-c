@@ -1,6 +1,8 @@
 #include <H1B3C/emulator.h>
 #include <H1B3C/endorsement-cert.h>
+#include <H1B3C/flash-persist.h>
 #include <H1B3C/memory.h>
+#include <H1B3C/rma.h>
 #include <H1B3C/peripherals.h>
 #include <H1B3C/proxies.h>
 
@@ -10,6 +12,7 @@
 #include <inttypes.h>
 
 #include <common/common.h>
+#include <common/peripherals/component.h>
 #include <common/runtime/control.h>
 
 #ifdef BUNDLED_FIRMWARE
@@ -209,6 +212,7 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
   TIMELS_Poll();
   GLOBALSEC_Poll();
   GPIO_Poll();
+  RMA_Poll();
   if ((++poll_count & 0x3Fu) == 0) component_poll_all();
 
   exc = M3_TakeException(ipsr, primask != 0, faultmask != 0);
@@ -306,9 +310,11 @@ void init_unicorn(void){
 
 void Havn_Initialize(void) {
   uc_err err;
+  uint8_t INFO0BUF[FLASH_INFO0_SIZE];
   uint8_t INFO1BUF[FLASH_INFO1_SIZE];
 
   /* blank flash is 0xFF */
+  memset(INFO0BUF, 0xFF, sizeof(INFO0BUF));
   memset(INFO1BUF, 0xFF, sizeof(INFO1BUF));
   memcpy(INFO1BUF + ENDORSEMENT_SEED_OFFSET, PROD_ENDORSEMENT_SEED,
          ENDORSEMENT_SEED_SIZE);
@@ -318,6 +324,12 @@ void Havn_Initialize(void) {
   /* Maps ROM, SRAM, and FLASH (PROG & Info1) */
   ctx.essential_memory = H1B3C_EssentialMemoryArray;
   map_essential_memory();
+
+  err = uc_mem_write(ctx.uc, FLASH_INFO0_BASE, INFO0BUF, sizeof(INFO0BUF));
+  if (err != UC_ERR_OK) {
+    LOG_ERR("unable to write INFO0BUF to FLASH_INFO0: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
 
 #ifdef BUNDLED_H1B3C
   if (ctx.firmware.bootrom[0] == '\0') ctx.firmware.useBundledROM = true;
@@ -348,6 +360,22 @@ void Havn_Initialize(void) {
   }
 
   LOG_VBS("Wrote INFO1BUF to FLASH_INFO1\n");
+
+  FlashPersist_Apply();
+
+  err = uc_mem_write(ctx.uc, FLASH_INFO1_BASE + ENDORSEMENT_SEED_OFFSET,
+                     PROD_ENDORSEMENT_SEED, ENDORSEMENT_SEED_SIZE);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("unable to patch the endorsement seed: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
+
+  err = uc_mem_write(ctx.uc, FLASH_PROG_BASE + ENDORSEMENT_CERT_OFFSET,
+                     PROD_RO_CERT_REGION, ENDORSEMENT_CERT_SIZE);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("unable to patch the endorsement certificates: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
 
   set_sp_pc(ctx.uc, FLASH_ROM_BASE);
 
@@ -440,12 +468,35 @@ void Havn_StartEmulation(void) {
   LOG_VBS("Emulation finished.\n");
 }
 
+void Havn_Reboot(void) {
+  LOG("Rebooting the emulated chip\n");
+
+  H1B3C_SuspendUSBProxy();
+  FlashPersist_Save();
+  component_stop_all();
+
+  if (ctx.uc != NULL) {
+    uc_err err = uc_close(ctx.uc);
+
+    ctx.uc = NULL;
+    if (err != UC_ERR_OK) LOG_ERR("Failed to close unicorn engine: %s\n", uc_strerror(err));
+  }
+
+  ctx.component_count = 0;
+  ctx.chipemu.ready = false;
+
+  Havn_Initialize();
+  H1B3C_ResumeUSBProxy();
+}
+
 void Havn_EndEmulation(void) {
   uc_err err;
 
   LOG_VBS("EndEmulation called\n");
 
   H1B3C_StopProxies();
+
+  FlashPersist_Save();
 
   if (ctx.uc == NULL) return;
 

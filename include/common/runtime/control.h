@@ -12,6 +12,7 @@
 typedef struct {
   _Atomic bool shutting_down;
   _Atomic bool emu_done;
+  _Atomic bool reboot_requested;
   _Atomic int pending_rc;
   char pending_msg[256];
   pthread_mutex_t fault_lock;
@@ -25,6 +26,8 @@ void runtime_init(void);
 LOG_PRINTF_FORMAT(2, 3)
 void runtime_fault(Rc rc, const char *fmt, ...);
 bool runtime_is_shutting_down(void);
+void runtime_request_reboot(void);
+bool runtime_reboot_requested(void);
 void runtime_start_emulation(void);
 void runtime_wake(void);
 void runtime_run(void);

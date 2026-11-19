@@ -59,6 +59,7 @@ void runtime_init(void) {
 
   atomic_store(&runtime.shutting_down, false);
   atomic_store(&runtime.emu_done, false);
+  atomic_store(&runtime.reboot_requested, false);
   atomic_store(&runtime.pending_rc, RC_SUCCESS);
   runtime.pending_msg[0] = '\0';
   runtime.emu_thread_started = false;
@@ -115,6 +116,18 @@ void runtime_fault(Rc rc, const char *fmt, ...) {
 
 bool runtime_is_shutting_down(void) {
   return atomic_load(&runtime.shutting_down);
+}
+
+void runtime_request_reboot(void) {
+  atomic_store(&runtime.reboot_requested, true);
+
+  if (ctx.uc != NULL) (void)uc_emu_stop(ctx.uc);
+
+  runtime_wake();
+}
+
+bool runtime_reboot_requested(void) {
+  return atomic_load(&runtime.reboot_requested);
 }
 
 #ifndef SINGLE_THREAD
@@ -174,6 +187,31 @@ static void runtime_shutdown(void) {
   emu_exit(rc);
 }
 
+static bool runtime_handle_reboot(void) {
+  if (!atomic_load(&runtime.emu_done)) return false;
+  if (!atomic_load(&runtime.reboot_requested)) return false;
+
+  atomic_store(&runtime.reboot_requested, false);
+  atomic_store(&runtime.emu_done, false);
+
+  if (runtime.emu_thread_started && !pthread_equal(pthread_self(), runtime.emu_thread)) {
+    pthread_join(runtime.emu_thread, NULL);
+    runtime.emu_thread_started = false;
+  }
+
+  if (ctx.chipemu.reboot == NULL) {
+    runtime_fault(RC_CHIPEMU_UNSUPPORTED, "chip does not support reboot");
+    return false;
+  }
+
+  ctx.chipemu.reboot();
+
+  if (runtime_is_shutting_down()) return false;
+
+  runtime_start_emulation();
+  return true;
+}
+
 void runtime_run(void) {
   for (;;) {
     struct pollfd fds[3];
@@ -182,6 +220,8 @@ void runtime_run(void) {
     int input_index = -1;
     int output_index = -1;
     int ret;
+
+    if (runtime_handle_reboot()) continue;
 
     if (runtime.signal_received != 0) break;
     if (atomic_load(&runtime.emu_done)) break;
@@ -226,6 +266,7 @@ void runtime_run(void) {
     if (input_index >= 0 && fds[input_index].revents != 0) console_pump_input();
     if (output_index >= 0 && (fds[output_index].revents & POLLIN) != 0) console_pump_output();
 
+    if (runtime_handle_reboot()) continue;
     if (atomic_load(&runtime.emu_done)) break;
   }
 
