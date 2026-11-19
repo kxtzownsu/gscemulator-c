@@ -23,7 +23,7 @@ Only H1B3C is implemented. The help text lists future chips, but they have no ba
 - `end_emulation(void)` takes no arguments, uses `ctx` for state, and must tolerate a partially initialized backend.
 - `emu_exit` is `_Noreturn`, takes an `Rc`, may call `end_emulation` before destroying `ctx.ac`, and is control-thread-only. Do not call `exit` from a backend; use `runtime_fault` for runtime errors and an `RC_*` value for fatal setup errors.
 - Peripherals register with `component_register` (inline) or `component_register_threaded` (worker) and are mapped in `initialize_peripherals()` through `component_map_mmio`. MMIO callbacks must not call `emu_exit` or `uc_close`; use `runtime_fault`.
-- Use `DEFINE_BASIC_REGISTER(name)` for any plain 32-bit read/write register with no side effects; add the offset switch cases yourself. Hand-roll only when the register has side effects, is read-only/constant, needs value validation, or keeps per-instance/array state.
+- Plain registers use `DEFINE_BASIC_REGISTER(name)` for storage plus a `BASIC_REGISTER_ENTRY(offset, name)` row in a `static const BasicRegister` table; dispatch with `basic_register_find(array, ARRAY_LEN(array), offset)`. Keep switch cases only for side effects, read-only/constant values, validation, or per-instance/array state.
 - Bundled firmware: `--bootrom`/`--firmware` override the `BUNDLED_<CHIP>_*` arrays. The backend sets `ctx.firmware.useBundledROM`/`useBundledFW` when its own `BUNDLED_<CHIP>` macro is defined and the matching path is empty.
 
 ## Steps
@@ -37,7 +37,7 @@ Only H1B3C is implemented. The help text lists future chips, but they have no ba
 7. Call `set_sp_pc(ctx.uc, <VTOR base>)` during initialize when the chip boots from a fixed vector table.
 8. Call `install_memory_fault_hook()` after `uc_open` so unmapped/protected accesses identify the address, access type, and PC; check `memory_fault_occurred()` after `uc_emu_start` and call `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)`.
 9. Add `include/<CHIP>/peripherals.h` with `DEFAULT_REG_LENGTH`, then one `include/<CHIP>/peripherals/<name>.h` per peripheral with its base and 4-byte-aligned register offsets.
-10. Add `src/<CHIP>/peripherals/` components and wire `initialize_peripherals()` with `component_register` or `component_register_threaded`, then `component_map_mmio`; use `component_log_unhandled()` in default register cases. Use `DEFINE_BASIC_REGISTER` for plain registers; hand-roll only for side effects, read-only values, validation, or per-instance/array state.
+10. Add `src/<CHIP>/peripherals/` components and wire `initialize_peripherals()` with `component_register` or `component_register_threaded`, then `component_map_mmio`; use `component_log_unhandled()` in default register cases. Plain registers go in a `BasicRegister` table via `DEFINE_BASIC_REGISTER` + `BASIC_REGISTER_ENTRY`; switch cases are for custom behavior.
 11. Add `src/<CHIP>/firmware/{bootrom,firmware}.bin`, add the chip to `BUNDLED_CHIPS` and `CHIPS` (`scripts/make/variables.mk`), and include the `BUNDLED_<CHIP>_*` arrays under `#ifdef BUNDLED_<CHIP>` when bundled boot is supported. The generated header emits `BUNDLED_<CHIP>`.
 12. Extend chip string parsing in `main.c`, update the `--chip` help text, and keep the default at `h1b3c`.
 13. Add the lowercase chip name to `tests/fuzz.dict`.

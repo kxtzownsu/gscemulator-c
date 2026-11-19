@@ -121,21 +121,21 @@ Peripherals:
 
 - `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`, `worker`) and `MmioRegion` (`component`, `base`, `size`).
 - `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
-- `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. UART is the only threaded peripheral today; PMU and the rest are inline.
+- `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. UART and TRNG are the threaded peripherals today; PMU and the rest are inline.
 - `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`. A threaded component's handlers run on its worker; everything else runs inline on the emulation thread.
 - `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC, then calls `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)`. On a worker it uses `tctx.mmio_pc`; it never reads unicorn from a worker and never calls `emu_exit`.
 - `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the MMIO region size. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
 - Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
 - Never call `emu_exit` or `uc_close` from an MMIO callback. Use `runtime_fault`; it records the first error, sets `shutting_down`, calls `uc_emu_stop`, and lets the control thread clean up.
 - Worker handlers must not call any `uc_*` API. If they need the PC, use the snapshot in `WorkerOp.pc` / `tctx.mmio_pc`.
-- `DEFINE_BASIC_REGISTER(name)` is the default for a plain 32-bit register with read/write state and no side effects. It generates `name`, `read_name`, and `write_name`; still add the offset `case` in the component's read/write switch. Hand-roll only when the register needs side effects, is read-only/constant, has per-instance/array state, or needs value validation (for example a `CTRL` state machine, `CPUID`, `ITCMCR`, `PINMUX`, or `FUSE`). Use `Component.state` for per-instance state.
+- Plain registers use the `BasicRegister` table: `DEFINE_BASIC_REGISTER(name)` declares the storage, `BASIC_REGISTER_ENTRY(offset, name)` adds it to a `static const BasicRegister <component>_registers[]`, and `basic_register_find(array, ARRAY_LEN(array), offset)` dispatches both read and write from that one entry. Do not add per-register read/write switch cases for plain registers. Keep switch cases only for side effects, read-only/constant values, value validation, table lookup, or per-instance/array state. Use `Component.state` for per-instance state.
 
 Threads:
 
 - T0 control is the main thread. It owns CLI/init, `ctx.ac`, stdio, signal handling, and teardown. Only T0 may call `emu_exit`, `uc_close`, `argcheck_destroy`, or `exit`.
 - T1 emulation owns `ctx.uc` and runs `ctx.chipemu.start_emulation()`. Runtime errors call `runtime_fault()` and return; they never exit from T1.
 - T2 console runs only with `--console pts`. It owns the pty master and the console/UART relay and never touches unicorn. Default console is `none` until UART exists.
-- T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART opts in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
+- T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART and TRNG opt in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
 - `common/runtime/control.h` owns `Runtime`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is callable from any thread; `runtime_run` tears down in the order stop T1/join, stop workers, stop console, `emu_exit`.
 - `common/runtime/thread.h` owns `ThreadCtx tctx` (role, name, worker/component, `mmio_pc`). It is thread-local labels and scratch only. Never store `ctx.uc`, `ctx.ac`, or the component array in it.
 - `common/runtime/worker.h` owns the worker queue and `worker_read` / `worker_write`.
@@ -234,12 +234,20 @@ For a bundled build, provide `src/<CHIP>/firmware/{bootrom,firmware}.bin` or the
 Thread/console smoke checks:
 
 ```bash
-./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu/UART tasks
+./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu/UART/TRNG tasks
 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The current H1B3C boot must still stop at the unmapped write at `0x400600c4` with status 246.
+The boot smoke test must stop at the same register/fault address and status as the pre-change build (currently PMU `PWRDN_SCRATCH31` at `0x4000011c`, status 246).
+
+Pick the smallest set that fits the change:
+
+- register-only change in an existing component (new plain register, constant, validation, threaded or not): warning-free `make`, boot smoke to the expected fault/rc, `git diff --check`. A targeted readback blob is optional and exercises the worker if the component is threaded.
+- changes to threading, worker, runtime, console, build flags, or CLI: the full pass above (`verify-c`, `make tsan`, `make SINGLE_THREAD=1`, `make STATIC=1`, `make fuzz FUZZ_TIME=1`).
+- docs/skills only: `git diff --check`.
+
+Do not run the full suite for a single register addition.
 
 Run the fuzz target after touching `libargs`, CLI parsing, or the fuzz harness.
 

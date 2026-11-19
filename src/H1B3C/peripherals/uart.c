@@ -6,34 +6,33 @@
 DEFINE_BASIC_REGISTER(nco)
 DEFINE_BASIC_REGISTER(ctrl)
 
+static const BasicRegister uart_registers[] = {
+  BASIC_REGISTER_ENTRY(REG_UART_NCO_OFFSET, nco),
+  BASIC_REGISTER_ENTRY(REG_UART_CTRL_OFFSET, ctrl),
+};
+
 static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
-  switch (offset) {
-    case REG_UART_NCO_OFFSET:
-      LOG_VBS("UART: read NCO (size=%u) -> 0x%08x\n", size, nco);
-      return read_nco(size);
-    case REG_UART_CTRL_OFFSET:
-      LOG_VBS("UART: read CTRL (size=%u) -> 0x%08x\n", size, ctrl);
-      return read_ctrl(size);
-    default:
-      component_log_unhandled(self, "read", offset);
-      return 0;
+  const BasicRegister *reg = basic_register_find(uart_registers, ARRAY_LEN(uart_registers), offset);
+
+  if (reg != NULL) {
+    LOG_VBS("UART: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
+    return *reg->value;
   }
+
+  component_log_unhandled(self, "read", offset);
+  return 0;
 }
 
 static void UART_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
-  switch (offset) {
-    case REG_UART_NCO_OFFSET:
-      write_nco(size, (uint32_t)value);
-      LOG_VBS("UART: wrote NCO (size=%u) <- 0x%08x\n", size, nco);
-      return;
-    case REG_UART_CTRL_OFFSET:
-      write_ctrl(size, (uint32_t)value);
-      LOG_VBS("UART: wrote CTRL (size=%u) <- 0x%08x\n", size, ctrl);
-      return;
-    default:
-      component_log_unhandled(self, "write", offset);
-      return;
+  const BasicRegister *reg = basic_register_find(uart_registers, ARRAY_LEN(uart_registers), offset);
+
+  if (reg != NULL) {
+    *reg->value = (uint32_t)value;
+    LOG_VBS("UART: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
+    return;
   }
+
+  component_log_unhandled(self, "write", offset);
 }
 
 Component *UART_Initialize(void) {

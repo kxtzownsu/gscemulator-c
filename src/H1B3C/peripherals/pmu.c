@@ -1,15 +1,20 @@
 #include <H1B3C/peripherals/pmu.h>
-#include <common/peripherals/define.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 
 #include <common/logger.h>
+#include <common/peripherals/define.h>
 
 DEFINE_BASIC_REGISTER(sw_pdb)
 DEFINE_BASIC_REGISTER(sw_pdb_secure)
 
 #define PMU_PERIPH_CLOCK_COUNT 48
+
+static const BasicRegister pmu_registers[] = {
+  BASIC_REGISTER_ENTRY(REG_PMU_SW_PDB_OFFSET, sw_pdb),
+  BASIC_REGISTER_ENTRY(REG_PMU_SW_PDB_SECURE_OFFSET, sw_pdb_secure),
+};
 
 static bool periph_clocks_en[PMU_PERIPH_CLOCK_COUNT];
 
@@ -33,7 +38,13 @@ static void pmu_periclk_apply(unsigned base, unsigned count, uint32_t value, boo
 }
 
 static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
+  const BasicRegister *reg = basic_register_find(pmu_registers, ARRAY_LEN(pmu_registers), offset);
   uint32_t value;
+
+  if (reg != NULL) {
+    LOG_VBS("PMU: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
+    return *reg->value;
+  }
 
   switch (offset) {
     case REG_PMU_PERICLKSET0_OFFSET:
@@ -52,12 +63,6 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
       value = pmu_periclk_value(32, 16);
       LOG_VBS("PMU: read PERICLKCLR1 (size=%u) -> 0x%08x\n", size, value);
       return value;
-    case REG_PMU_SW_PDB_OFFSET:
-      LOG_VBS("PMU: read SW_PDB (size=%u) -> 0x%08x\n", size, value);
-      return read_sw_pdb(size);
-    case REG_PMU_SW_PDB_SECURE_OFFSET:
-      LOG_VBS("PMU: read SW_PDB_SECURE (size=%u) -> 0x%08x\n", size, value);
-      return read_sw_pdb_secure(size);
     default:
       component_log_unhandled(self, "read", offset);
       return 0;
@@ -65,6 +70,14 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
 }
 
 static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
+  const BasicRegister *reg = basic_register_find(pmu_registers, ARRAY_LEN(pmu_registers), offset);
+
+  if (reg != NULL) {
+    *reg->value = (uint32_t)value;
+    LOG_VBS("PMU: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
+    return;
+  }
+
   switch (offset) {
     case REG_PMU_PERICLKSET0_OFFSET:
       pmu_periclk_apply(0, 32, (uint32_t)value, true);
@@ -82,17 +95,8 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
       pmu_periclk_apply(32, 16, (uint32_t)value, false);
       LOG_VBS("PMU: wrote PERICLKCLR1 (size=%u) <- 0x%08x\n", size, (uint32_t)value);
       return;
-    case REG_PMU_SW_PDB_OFFSET:
-      LOG_VBS("PMU: wrote SW_PDB (size=%u) <- 0x%08x\n", size, (uint32_t)value);
-      write_sw_pdb(size, value);
-      return;
-    case REG_PMU_SW_PDB_SECURE_OFFSET:
-      LOG_VBS("PMU: wrote SW_PDB_SECURE (size=%u) <- 0x%08x\n", size, (uint32_t)value);
-      write_sw_pdb_secure(size, value);
-      return;
     default:
       component_log_unhandled(self, "write", offset);
-      return;
   }
 }
 
@@ -100,6 +104,9 @@ Component *PMU_Initialize(void) {
   unsigned i;
 
   for (i = 0; i < PMU_PERIPH_CLOCK_COUNT; i++) periph_clocks_en[i] = false;
+
+  sw_pdb = 0;
+  sw_pdb_secure = 0;
 
   return component_register("PMU", NULL, PMU_Read, PMU_Write);
 }

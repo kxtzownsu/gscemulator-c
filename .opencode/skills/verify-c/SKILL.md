@@ -34,6 +34,17 @@ BIN="build/$(uname -m)/gscemu"
 make fuzz FUZZ_TIME=1
 ```
 
+## When to run the full pass
+
+`verify.sh` is the full gate. Use it for threading, worker, runtime, console,
+build-flag, or CLI changes.
+
+For a single register addition to an existing component, skip it: run a
+warning-free `make`, the boot smoke test, and `git diff --check`. A targeted
+readback blob is enough extra coverage, and it also exercises the worker when
+the component is threaded. Do not burn the full suite on one
+`DEFINE_BASIC_REGISTER`.
+
 ## Thread and console checks
 
 ```bash
@@ -45,7 +56,7 @@ make tsan
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-A default build should show control/emu/UART tasks; `--console pts` adds the console task. `--console none` is the default and creates no console thread. PMU is inline, so its logs come from `[emu]`.
+A default build should show control/emu/UART/TRNG tasks; `--console pts` adds the console task. `--console none` is the default and creates no console thread. PMU is inline, so its logs come from `[emu]`.
 
 ## Bundled builds
 

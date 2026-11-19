@@ -7,47 +7,57 @@
 
 DEFINE_BASIC_REGISTER(demcr)
 DEFINE_BASIC_REGISTER(dwt_ctrl)
-DEFINE_BASIC_REGISTER(itcmcr)
+
+static uint32_t itcmcr;
+
+static const BasicRegister m3_registers[] = {
+  BASIC_REGISTER_ENTRY(REG_M3_DEMCR_OFFSET, demcr),
+  BASIC_REGISTER_ENTRY(REG_M3_DWT_CTRL_OFFSET, dwt_ctrl),
+};
 
 static uint64_t M3_Read(Component *self, uint64_t offset, unsigned size) {
+  const BasicRegister *reg = basic_register_find(m3_registers, ARRAY_LEN(m3_registers), offset);
+
   switch (offset) {
-    case REG_M3_DEMCR_OFFSET:
-      LOG_VBS("M3: read DEMCR (size=%u) -> 0x%08x\n", size, demcr);
-      return read_demcr(size);
-    case REG_M3_DWT_CTRL_OFFSET:
-      LOG_VBS("M3: read DWT_CTRL (size=%u) -> 0x%08x\n", size, dwt_ctrl);
-      return read_dwt_ctrl(size);
     case REG_M3_CPUID_OFFSET:
       LOG_VBS("M3: read CPUID (size=%u) -> 0x%08x\n", size, M3_CPUID_VALUE);
       return M3_CPUID_VALUE;
     case REG_M3_ITCMCR_OFFSET:
       LOG_VBS("M3: read ITCMCR (size=%u) -> 0x%08x\n", size, itcmcr);
-      return read_itcmcr(size);
+      return itcmcr;
     default:
-      component_log_unhandled(self, "read", offset);
-      return 0;
+      break;
   }
+
+  if (reg != NULL) {
+    LOG_VBS("M3: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
+    return *reg->value;
+  }
+
+  component_log_unhandled(self, "read", offset);
+  return 0;
 }
 
 static void M3_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
+  const BasicRegister *reg = basic_register_find(m3_registers, ARRAY_LEN(m3_registers), offset);
+
   switch (offset) {
-    case REG_M3_DEMCR_OFFSET:
-      write_demcr(size, (uint32_t)value);
-      LOG_VBS("M3: wrote DEMCR (size=%u) <- 0x%08x\n", size, (uint32_t)value);
-      return;
-    case REG_M3_DWT_CTRL_OFFSET:
-      write_dwt_ctrl(size, (uint32_t)value);
-      LOG_VBS("M3: wrote DWT_CTRL (size=%u) <- 0x%08x\n", size, (uint32_t)value);
-      return;
     case REG_M3_ITCMCR_OFFSET:
       /* Hardware always reads back 7 after a write. */
-      write_itcmcr(size, 7);
+      itcmcr = 7;
       LOG_VBS("M3: wrote ITCMCR (size=%u) <- 0x%08x\n", size, (uint32_t)value);
       return;
     default:
-      component_log_unhandled(self, "write", offset);
-      return;
+      break;
   }
+
+  if (reg != NULL) {
+    *reg->value = (uint32_t)value;
+    LOG_VBS("M3: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
+    return;
+  }
+
+  component_log_unhandled(self, "write", offset);
 }
 
 Component *M3_Initialize(void) {
