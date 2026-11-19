@@ -6,6 +6,7 @@
 #include <H1B3C/peripherals/globalsec.h>
 #include <H1B3C/peripherals/pmu.h>
 #include <H1B3C/peripherals/pinmux.h>
+#include <H1B3C/peripherals/uart.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 

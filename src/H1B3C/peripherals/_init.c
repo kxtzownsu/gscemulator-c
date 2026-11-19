@@ -8,12 +8,14 @@ void initialize_peripherals(void) {
   Component *GLOBALSEC = GLOBALSEC_Initialize();
   Component *PMU = PMU_Initialize();
   Component *PINMUX = PINMUX_Initialize();
+  Component *UART = UART_Initialize();
   MmioRegion regions[] = {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = GLOBALSEC, .base = REG_GLOBALSEC_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = PMU, .base = REG_PMU_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = PINMUX, .base = REG_PINMUX_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
+    { .component = PINMUX, .base = REG_PINMUX_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = UART, .base = REG_UART_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
   };
 
   if (
@@ -21,7 +23,8 @@ void initialize_peripherals(void) {
       eFuses == NULL ||
       GLOBALSEC == NULL ||
       PMU == NULL ||
-      PINMUX == NULL
+      PINMUX == NULL ||
+      UART == NULL
     ) {
     LOG_ERR("Failed to initialize peripherals\n");
     emu_exit(RC_CHIPEMU_FAILED_INIT);

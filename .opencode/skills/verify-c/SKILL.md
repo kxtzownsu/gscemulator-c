@@ -45,7 +45,7 @@ make tsan
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-A default build should show control/emu tasks; `--console pts` adds the console task. `--console none` is the default and creates no console thread. No peripheral uses a worker today, so there are no `[PMU]` tasks.
+A default build should show control/emu/UART tasks; `--console pts` adds the console task. `--console none` is the default and creates no console thread. PMU is inline, so its logs come from `[emu]`.
 
 ## Bundled builds
 
