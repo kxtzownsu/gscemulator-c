@@ -53,10 +53,11 @@ checker. Boot success is not register coverage.
 ```bash
 make SINGLE_THREAD=1
 ./build/$(uname -m)/gscemu       # status 246, [control] logs
+./build/$(uname -m)/gscemu --console pty -r <loop-rom> -f <loop-rom>  # path printed, stdio free
 make tsan
 ./build/$(uname -m)/gscemu       # no ThreadSanitizer report
-./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
-printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+./build/$(uname -m)/gscemu --console stdio -r <loop-rom> -f <loop-rom>
+printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console stdio -r <loop-rom> -f <loop-rom>
 ```
 
 An interactive default build adds the console task (6 tasks); a non-TTY default and `--console none` have 5. PMU is inline, so its logs come from `[emu]`.

@@ -25,6 +25,7 @@ typedef struct {
   bool started;
   bool stdin_open;
   bool stdin_raw;
+  ConsoleMode mode;
   bool pending_cr;
   struct termios stdin_termios;
 } Console;
@@ -104,9 +105,11 @@ static void *console_thread_main(void *arg) {
   return NULL;
 }
 
-bool console_start(void) {
+bool console_start(ConsoleMode mode) {
   uint8_t ready = 0;
   ssize_t got;
+
+  if (mode == CONSOLE_NONE) return true;
 
   if (console.started) return true;
 
@@ -126,11 +129,13 @@ bool console_start(void) {
 
   console_set_nonblocking(console.stop_pipe[1]);
 
-  console.stdin_open = true;
+  console.mode = mode;
+  console.stdin_open = mode == CONSOLE_STDIO;
   console.stdin_raw = false;
   console.pending_cr = false;
 
-  if (isatty(STDIN_FILENO) && tcgetattr(STDIN_FILENO, &console.stdin_termios) == 0) {
+  if (mode == CONSOLE_STDIO && isatty(STDIN_FILENO) &&
+      tcgetattr(STDIN_FILENO, &console.stdin_termios) == 0) {
     struct termios termios = console.stdin_termios;
 
     cfmakeraw(&termios);
@@ -181,7 +186,11 @@ bool console_start(void) {
 
   console.started = true;
 
-  printf("Console PTS: %s\n", console.name);
+  if (mode == CONSOLE_PTY) {
+    printf("Console PTS (pty-only): %s\n", console.name);
+  } else {
+    printf("Console PTS: %s\n", console.name);
+  }
   fflush(stdout);
 
   return true;
@@ -221,18 +230,23 @@ void console_stop(void) {
   console.ready_pipe[1] = -1;
   console.started = false;
   console.stdin_open = false;
+  console.mode = CONSOLE_NONE;
 }
 
 bool console_active(void) {
-  return console.started;
+  return console.started && console.mode != CONSOLE_NONE;
+}
+
+ConsoleMode console_mode(void) {
+  return console.mode;
 }
 
 bool console_stdin_open(void) {
-  return console.stdin_open;
+  return console.started && console.mode == CONSOLE_STDIO && console.stdin_open;
 }
 
 int console_stdio_fd(void) {
-  return console.started ? console.slave : -1;
+  return console.started && console.mode == CONSOLE_STDIO ? console.slave : -1;
 }
 
 int console_uart_read(uint8_t *buf, size_t len) {

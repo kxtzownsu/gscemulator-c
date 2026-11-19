@@ -85,7 +85,7 @@ CLI:
 - `--disable-tpm-chardev` and `--disable-usb-proxy` skip the corresponding privileged proxy. By default, when `geteuid() == 0`, the emulator checks `tpm_vtpm_proxy` + `/dev/vtpmx` and `dummy_hcd` + `raw_gadget` + `/dev/raw-gadget` + `dummy_udc.0`, asks for ENTER to continue when a dependency is missing, and starts `vtpm-proxy` and `usb-proxy`. Non-root runs never start or check them. `vtpm-proxy` creates `/dev/tpmN` through `/dev/vtpmx` and forwards TPM commands over the SPS slave transport; `usb-proxy` binds `/dev/raw-gadget` to `dummy_udc.0` and exposes the emulated DWC OTG controller as CCD USB `18d1:5014`.
 - `--flash_dir DIR` overrides the default persistent flash directory. The default is `$HOME/.local/share/gscemu-c/flash`, holding `info0.bin`, `info1.bin`, and `prog.bin`; missing files are created from the chip defaults.
 - `--no-persist` disables flash files entirely. The emulator uses the default INFO0/INFO1/PROG contents and never reads or writes the flash directory.
-- `--console none|pts` selects console output. In multi-threaded builds the default is `pts` when stdin is a TTY and `none` otherwise; `--console none` always disables it. `pts` creates a pty, prints its slave path, and routes UART through it. T0 owns stdio: it writes stdin to the slave and copies slave output to stdout. UART reads and writes the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
+- `--console none|stdio|pty` selects console output. In multi-threaded builds the default is `stdio` when stdin is a TTY and `none` otherwise; `--console none` always disables it. `stdio` creates a pty, prints its slave path, and routes UART through it; T0 pumps stdin and stdout through the slave. `pty` creates the pty and prints its slave path but does not attach stdio, for tools such as shaft. UART reads and writes the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
 - `--version` prints the build version and exits 0. The output includes the program name, `0.1.0-<commit>[-dirty]`, toolchain, unicorn version/commit, build date/unix timestamp, available chips, and bundled firmware.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -148,13 +148,13 @@ Threads:
 
 - T0 control is the main thread. It owns CLI/init, `ctx.ac`, stdio, signal handling, and teardown. Only T0 may call `emu_exit`, `uc_close`, `argcheck_destroy`, or `exit`.
 - T1 emulation owns `ctx.uc` and runs `ctx.chipemu.start_emulation()`. Runtime errors call `runtime_fault()` and return; they never exit from T1.
-- T2 console runs in multi-threaded builds when stdin is a TTY or with `--console pts`; `--console none` disables it. It creates the pty, publishes the slave path, and owns the pty lifetime; it never touches unicorn or stdio. T0 owns stdio and pumps the slave; the UART worker reads and writes the master.
+- T2 console runs in multi-threaded builds with `--console stdio` or `--console pty`; `--console none` disables it. It creates the pty, publishes the slave path, and owns the pty lifetime; it never touches unicorn or stdio. In `stdio` mode T0 owns stdio and pumps the slave; in `pty` mode stdio stays free and only the UART worker touches the master.
 - T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART, TRNG, and KEYMGR opt in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
 - `common/runtime/control.h` owns `Runtime`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is callable from any thread; `runtime_run` tears down in the order stop T1/join, stop workers, stop console, `emu_exit`.
 - `common/runtime/thread.h` owns `ThreadCtx tctx` (role, name, worker/component, `mmio_pc`). It is thread-local labels and scratch only. Never store `ctx.uc`, `ctx.ac`, or the component array in it.
 - `common/runtime/worker.h` owns the worker queue and `worker_read` / `worker_write`.
-- `common/runtime/console.h` owns `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. Raw stdin keeps `ISIG` enabled, so Ctrl-C takes the SIGINT teardown path instead of reaching UART.
-- `make SINGLE_THREAD=1` bypasses T1 and all workers, runs emulation inline on T0, and rejects `--console pts`. It is the fuzz/CI path.
+- `common/runtime/console.h` owns `ConsoleMode`, `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. `console_start` takes `CONSOLE_STDIO` or `CONSOLE_PTY`; only `stdio` opens stdin raw and pumps it. Raw stdin keeps `ISIG` enabled, so Ctrl-C takes the SIGINT teardown path instead of reaching UART.
+- `make SINGLE_THREAD=1` bypasses T1 and all workers, runs emulation inline on T0, and rejects `--console stdio` and `--console pty`. It is the fuzz/CI path.
 - `make tsan` rebuilds with `-fsanitize=thread`; use it for any change to runtime, workers, logging, or component dispatch.
 
 Emulator:
@@ -226,7 +226,7 @@ Version:
 - `BUNDLED_CHIPS` selects the firmware pairs; each pair defaults to `src/<CHIP>/firmware/{bootrom,firmware}.bin`. The generated header defines `BUNDLED_<CHIP>` per chip; backends gate bundled use on that macro, not on `BUNDLED_FIRMWARE`.
 - `STATIC=1` replaces the pkg-config unicorn flags with `third_party/unicorn/include`, `$(UNICORN_STATIC_LIB)`, `-static`, and `-lpthread -lm`.
 - `CFLAGS` and `LDLIBS` include `-pthread`; the console also links `-lutil`.
-- `SINGLE_THREAD=1` adds `-DSINGLE_THREAD`, bypasses T1 and workers, and rejects `--console pts`.
+- `SINGLE_THREAD=1` adds `-DSINGLE_THREAD`, bypasses T1 and workers, and rejects `--console stdio` and `--console pty`.
 - `TSAN=1` adds `-fsanitize=thread` to `CFLAGS`/`LDFLAGS`; `make tsan` is the wrapper target. `SINGLE_THREAD`, `TSAN`, and `STATIC` are tracked in `build/<ARCH>/.build-config` so toggling rebuilds every object.
 - `LOCAL_UNICORN=1` only builds the local static library; it does not switch the headers or link. Use `STATIC=1` for a local static link.
 - `SRCS` filters out `src/H1B3C/firmware/`; those files build for the emulated target, not the host. Do not add them to the host objects.
@@ -250,8 +250,8 @@ Thread/console smoke checks:
 
 ```bash
 ./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu/UART/TRNG/KEYMGR tasks
-./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
-printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+./build/$(uname -m)/gscemu --console stdio -r <loop-rom> -f <loop-rom>
+printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console stdio -r <loop-rom> -f <loop-rom>
 ```
 
 The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then the RW banner (`--- UART initialized after reboot ---`, reset cause, image string, and `Inits done`), the strap readings (`strap pin readings: a1:2 a9:2 a6:1 a12:1` and `Valid strap: 0xa`), `Running in FIPS 140-2 approved mode`, `deferred_tpm_rst_isr`, `AP on`, `tpm_init`, the `Console is enabled` banner, and keep running until interrupted.

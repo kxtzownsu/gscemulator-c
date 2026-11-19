@@ -14,8 +14,9 @@
 - Set `VERIFY_BOOTROM` and `VERIFY_FIRMWARE` to exercise the full boot in `verify.sh`; it waits up to 20s and requires `Inits done` in the output. The check runs without `-v` because per-access verbose logging slows emulation by more than an order of magnitude.
 - An interactive default build has 6 tasks (control, emu, console, UART, TRNG, KEYMGR); a non-TTY default and `--console none` have 5; `make SINGLE_THREAD=1` has 1.
 - The current H1B3C boot prints the banner, `exp ?36`, `Himg`/`Hfss`/`Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, `jump @00040400`, `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, the loader `Himg`/`Hfss`/`Hinf` lines with `: 1`, `devm :0`, `jump @44000`, then the RW banner (`--- UART initialized after reboot ---`, reset cause, image, `Inits done`), the strap readings, `Running in FIPS 140-2 approved mode`, the `Console is enabled` banner, and keeps running until interrupted.
-- `./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>` creates a pty, prints the slave path, and routes stdin/stdout and UART through it.
-- `make SINGLE_THREAD=1` runs emulation inline on the control thread and rejects `--console pts` with 244.
+- `./build/$(uname -m)/gscemu --console stdio -r <loop-rom> -f <loop-rom>` creates a pty, prints the slave path, and routes stdin/stdout and UART through it.
+- `./build/$(uname -m)/gscemu --console pty -r <loop-rom> -f <loop-rom>` creates a pty and prints the slave path but leaves stdio free; UART only uses the pty.
+- `make SINGLE_THREAD=1` runs emulation inline on the control thread and rejects `--console stdio` and `--console pty` with 244.
 - `make tsan` builds and the boot smoke test produces no ThreadSanitizer report.
 - `./build/$(uname -m)/gscemu -f <firmware> -r <bootrom>` accepts `--firmware` and loads it into the firmware region.
 - `./build/$(uname -m)/gscemu --chip invalid` exits with `RC_ARG_CHIP_INVALID` (254).

@@ -14,7 +14,7 @@ Public headers. They define the contract for `src/`.
 - `common/runtime/control.h` owns `Runtime`, `runtime_init`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is the only fatal path callable from any thread; `runtime_run` owns teardown and the control poll loop.
 - `common/runtime/thread.h` owns `ThreadCtx` and the `tctx` thread-local (role, name, worker, component, MMIO PC snapshot). Keep it labels and scratch only; never store `ctx.uc`, `ctx.ac`, or the component array in it.
 - `common/runtime/worker.h` owns `Worker`, `WorkerOp`, `worker_start`, `worker_stop`, `worker_read`, `worker_write`, and `worker_poll`. Reads and default writes are synchronous; async writes and polls are opt-in.
-- `common/runtime/console.h` owns `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. T2 creates the pty; T0 owns stdio and the slave side; UART owns the master side.
+- `common/runtime/console.h` owns `ConsoleMode`, `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. T2 creates the pty; in `CONSOLE_STDIO` T0 owns stdio and pumps the slave; in `CONSOLE_PTY` stdio stays free and only UART owns the master side.
 - `common/vtor.h` owns `set_sp_pc`. It takes the engine and vector-table base so chip callers stay in control of the address.
 - `common/sha256.h` owns the `Sha256Context` API used by the KEYMGR SHA engine. Keep it dependency-free and chip-agnostic.
 - `common/aes.h` owns the `AesContext` block-cipher API used by the KEYMGR AES engine. It covers 128/192/256-bit keys and single-block encrypt/decrypt; modes and FIFOs stay in the chip component.

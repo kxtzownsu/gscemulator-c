@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
   int wait_for_enter;
   int disable_tpm;
   int disable_usb;
-  int console_pts = 0;
+  ConsoleMode console_mode = CONSOLE_NONE;
 
   ctx_init();
   runtime_init();
@@ -60,7 +60,8 @@ int main(int argc, char **argv) {
   chip = argcheck_fequals(ctx.ac, "--chip", "-c", "Chip to emulate [ h1b3c | h1c3m | h1d3c | h1d3m | npcx ]");
   rom_path = argcheck_fequals(ctx.ac, "--bootrom", "-r", "BootROM binary to use (Overrides bundled BootROM binary for specified chip)");
   fw_path = argcheck_fequals(ctx.ac, "--firmware", "-f", "Firmware binary to use (Overrides bundled firmware binary for specified chip)");
-  console_arg = argcheck_fequals(ctx.ac, "--console", NULL, "Console output [ none | pts ]");
+  console_arg = argcheck_fequals(ctx.ac, "--console", NULL,
+                                 "Console output [ none | stdio | pty ]");
   flash_dir_arg = argcheck_fequals(ctx.ac, "--flash_dir", NULL,
                                    "Directory for persisted flash images");
   no_persist = argcheck_fbool(ctx.ac, "--no-persist", NULL,
@@ -95,14 +96,16 @@ int main(int argc, char **argv) {
 
   if (console_arg == NULL) {
 #ifdef SINGLE_THREAD
-    console_pts = 0;
+    console_mode = CONSOLE_NONE;
 #else
-    console_pts = isatty(STDIN_FILENO) ? 1 : 0;
+    console_mode = isatty(STDIN_FILENO) ? CONSOLE_STDIO : CONSOLE_NONE;
 #endif
   } else if (strcmp(console_arg, "none") == 0) {
-    console_pts = 0;
-  } else if (strcmp(console_arg, "pts") == 0) {
-    console_pts = 1;
+    console_mode = CONSOLE_NONE;
+  } else if (strcmp(console_arg, "stdio") == 0 || strcmp(console_arg, "pts") == 0) {
+    console_mode = CONSOLE_STDIO;
+  } else if (strcmp(console_arg, "pty") == 0) {
+    console_mode = CONSOLE_PTY;
   } else {
     LOG_ERR("Invalid console mode: %s\n", console_arg);
     emu_exit(RC_ARG_CONSOLE_INVALID);
@@ -142,12 +145,15 @@ int main(int argc, char **argv) {
   if (!ctx.chipemu.ready) emu_exit(RC_CHIPEMU_FAILED_INIT);
 
 #ifdef SINGLE_THREAD
-  if (console_pts) {
-    LOG_ERR("--console pts is not supported with SINGLE_THREAD\n");
+  if (console_mode != CONSOLE_NONE) {
+    LOG_ERR("--console %s is not supported with SINGLE_THREAD\n",
+            console_mode == CONSOLE_PTY ? "pty" : "stdio");
     emu_exit(RC_ARG_CONSOLE_INVALID);
   }
 #else
-  if (console_pts && !console_start()) emu_exit(RC_CHIPEMU_FAILED_INIT);
+  if (console_mode != CONSOLE_NONE && !console_start(console_mode)) {
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
 #endif
 
   if (wait_for_enter) {
