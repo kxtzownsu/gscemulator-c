@@ -18,6 +18,7 @@ static const BasicRegister pmu_registers[] = {
 
 static bool periph_clocks_en[PMU_PERIPH_CLOCK_COUNT];
 static uint32_t pwrdn_scratch[REG_PMU_PWRDN_SCRATCH_COUNT];
+static uint32_t pwrdn_scratch_lock[REG_PMU_PWRDN_SCRATCH_LOCK_COUNT];
 
 static int pwrdn_scratch_index(uint64_t offset) {
   uint64_t end = (uint64_t)REG_PMU_PWRDN_SCRATCH_OFFSET +
@@ -27,6 +28,16 @@ static int pwrdn_scratch_index(uint64_t offset) {
   if (offset < REG_PMU_PWRDN_SCRATCH_OFFSET || offset >= end) return -1;
 
   return (int)((offset - REG_PMU_PWRDN_SCRATCH_OFFSET) / sizeof(uint32_t));
+}
+
+static int pwrdn_scratch_lock_index(uint64_t offset) {
+  uint64_t end = (uint64_t)REG_PMU_PWRDN_SCRATCH_LOCK_OFFSET +
+                 (uint64_t)REG_PMU_PWRDN_SCRATCH_LOCK_COUNT * sizeof(uint32_t);
+
+  if ((offset & 3u) != 0) return -1;
+  if (offset < REG_PMU_PWRDN_SCRATCH_LOCK_OFFSET || offset >= end) return -1;
+
+  return (int)((offset - REG_PMU_PWRDN_SCRATCH_LOCK_OFFSET) / sizeof(uint32_t));
 }
 
 static uint32_t pmu_periclk_value(unsigned base, unsigned count) {
@@ -65,6 +76,13 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
     return pwrdn_scratch[scratch_index];
   }
 
+  scratch_index = pwrdn_scratch_lock_index(offset);
+  if (scratch_index >= 0) {
+    LOG_VBS("PMU: read PWRDN_SCRATCH_LOCK%d (size=%u) -> 0x%08x\n", scratch_index, size,
+            pwrdn_scratch_lock[scratch_index]);
+    return pwrdn_scratch_lock[scratch_index];
+  }
+
   switch (offset) {
     case REG_PMU_PERICLKSET0_OFFSET:
       value = pmu_periclk_value(0, 32);
@@ -100,9 +118,23 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
 
   scratch_index = pwrdn_scratch_index(offset);
   if (scratch_index >= 0) {
+    if ((scratch_index < 8 && pwrdn_scratch_lock[0] != 0) ||
+        (scratch_index >= 8 && scratch_index < 16 && pwrdn_scratch_lock[1] != 0)) {
+      LOG_VBS("PMU: ignored write to locked PWRDN_SCRATCH%d\n", scratch_index);
+      return;
+    }
+
     pwrdn_scratch[scratch_index] = (uint32_t)value;
     LOG_VBS("PMU: wrote PWRDN_SCRATCH%d (size=%u) <- 0x%08x\n", scratch_index, size,
             pwrdn_scratch[scratch_index]);
+    return;
+  }
+
+  scratch_index = pwrdn_scratch_lock_index(offset);
+  if (scratch_index >= 0) {
+    if (value != 0) pwrdn_scratch_lock[scratch_index] = 1;
+    LOG_VBS("PMU: wrote PWRDN_SCRATCH_LOCK%d (size=%u) <- 0x%08x\n", scratch_index, size,
+            pwrdn_scratch_lock[scratch_index]);
     return;
   }
 
@@ -133,6 +165,7 @@ Component *PMU_Initialize(void) {
 
   for (i = 0; i < PMU_PERIPH_CLOCK_COUNT; i++) periph_clocks_en[i] = false;
   for (i = 0; i < REG_PMU_PWRDN_SCRATCH_COUNT; i++) pwrdn_scratch[i] = 0;
+  for (i = 0; i < REG_PMU_PWRDN_SCRATCH_LOCK_COUNT; i++) pwrdn_scratch_lock[i] = 0;
 
   sw_pdb = 0;
   sw_pdb_secure = 0;
