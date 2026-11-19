@@ -13,6 +13,7 @@
 #include <H1B3C/peripherals/gpio.h>
 #include <H1B3C/peripherals/keymgr.h>
 #include <H1B3C/peripherals/flash.h>
+#include <H1B3C/peripherals/usb.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 

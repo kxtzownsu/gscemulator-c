@@ -19,6 +19,7 @@ COMPONENTS = [
     "FUSE",
     "M3",
     "GPIO",
+    "USB",
     "XO",
     "SWDP",
 ]

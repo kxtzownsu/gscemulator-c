@@ -15,6 +15,7 @@ void initialize_peripherals(void) {
   Component *GPIO = GPIO_Initialize();
   Component *KEYMGR = KEYMGR_Initialize();
   Component *FLASH = FLASH_Initialize();
+  Component *USB = USB_Initialize();
   MmioRegion regions[] = {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
@@ -27,7 +28,8 @@ void initialize_peripherals(void) {
     { .component = XO, .base = REG_XO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = GPIO, .base = REG_GPIO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = KEYMGR, .base = REG_KEYMGR_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = FLASH, .base = REG_FLASH_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
+    { .component = FLASH, .base = REG_FLASH_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = USB, .base = REG_USB_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
   };
 
   if (
@@ -42,7 +44,8 @@ void initialize_peripherals(void) {
       XO == NULL ||
       GPIO == NULL ||
       KEYMGR == NULL ||
-      FLASH == NULL
+      FLASH == NULL ||
+      USB == NULL
     ) {
     LOG_ERR("Failed to initialize peripherals\n");
     emu_exit(RC_CHIPEMU_FAILED_INIT);
