@@ -32,7 +32,10 @@
 #define KEYMGR_AES_WFIFO_DEPTH 16u
 #define KEYMGR_AES_RFIFO_DEPTH 32u
 
+#define KEYMGR_SHA_EN_SHA1 (1u << 1)
 #define KEYMGR_SHA_EN_LIVESTREAM (1u << 4)
+#define KEYMGR_SHA_EN_HMAC (1u << 5)
+#define KEYMGR_SHA_BLOCK_SIZE 64u
 #define KEYMGR_SHA_EN_INT_DONE (1u << 16)
 #define KEYMGR_SHA_TRIG_GO (1u << 0)
 #define KEYMGR_SHA_TRIG_RESET (1u << 1)
@@ -139,11 +142,38 @@ static int key_w_index(uint64_t offset) {
   return (int)((offset - REG_KEYMGR_SHA_KEY_W0_OFFSET) / sizeof(uint32_t));
 }
 
+static void sha_hmac_key_block(uint8_t block[KEYMGR_SHA_BLOCK_SIZE], uint8_t pad) {
+  unsigned i;
+
+  for (i = 0; i < REG_KEYMGR_SHA_KEY_W_COUNT; i++) {
+    block[i * 4u + 0] = (uint8_t)sha_key_w[i];
+    block[i * 4u + 1] = (uint8_t)(sha_key_w[i] >> 8);
+    block[i * 4u + 2] = (uint8_t)(sha_key_w[i] >> 16);
+    block[i * 4u + 3] = (uint8_t)(sha_key_w[i] >> 24);
+  }
+  memset(&block[REG_KEYMGR_SHA_KEY_W_COUNT * 4u], 0,
+         KEYMGR_SHA_BLOCK_SIZE - REG_KEYMGR_SHA_KEY_W_COUNT * 4u);
+  for (i = 0; i < KEYMGR_SHA_BLOCK_SIZE; i++) block[i] ^= pad;
+}
+
 static void sha_hash(void) {
   uint8_t digest[32];
   unsigned i;
 
-  sha256_final(&sha_context, digest);
+  if ((sha_en & (KEYMGR_SHA_EN_HMAC | KEYMGR_SHA_EN_SHA1)) == KEYMGR_SHA_EN_HMAC) {
+    uint8_t inner[32];
+    uint8_t block[KEYMGR_SHA_BLOCK_SIZE];
+    Sha256Context outer;
+
+    sha256_final(&sha_context, inner);
+    sha256_init(&outer);
+    sha_hmac_key_block(block, 0x5C);
+    sha256_update(&outer, block, sizeof(block));
+    sha256_update(&outer, inner, sizeof(inner));
+    sha256_final(&outer, digest);
+  } else {
+    sha256_final(&sha_context, digest);
+  }
 
   for (i = 0; i < REG_KEYMGR_SHA_STS_H_COUNT; i++) {
     sha_sts_h[i] = (uint32_t)digest[4 * i] | ((uint32_t)digest[4 * i + 1] << 8) |
@@ -650,6 +680,13 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
 
   if (keymgr_aes_write(offset, size, value)) return;
 
+  if (offset == REG_KEYMGR_CERT_REVOKE_CTRL0_OFFSET ||
+      offset == REG_KEYMGR_CERT_REVOKE_CTRL1_OFFSET ||
+      offset == REG_KEYMGR_CERT_REVOKE_CTRL2_OFFSET) {
+    LOG_VBS("KEYMGR: ignored write to cert revoke control\n");
+    return;
+  }
+
   if (reg != NULL) {
     *reg->value = (uint32_t)value;
     LOG_VBS("KEYMGR: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
@@ -729,6 +766,12 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
         sha_input_len = 0;
         sha_itop = 0;
         sha_receiving = true;
+        if ((sha_en & (KEYMGR_SHA_EN_HMAC | KEYMGR_SHA_EN_SHA1)) == KEYMGR_SHA_EN_HMAC) {
+          uint8_t block[KEYMGR_SHA_BLOCK_SIZE];
+
+          sha_hmac_key_block(block, 0x36);
+          sha256_update(&sha_context, block, sizeof(block));
+        }
       } else if (((uint32_t)value & KEYMGR_SHA_TRIG_RESET) != 0) {
         sha_receiving = false;
         sha_itop = 0;
@@ -783,9 +826,9 @@ Component *KEYMGR_Initialize(void) {
   sha_use_hidden_key = 0;
   sha_execute_count_state = 0;
   sha_execute_count_max = 0;
-  cert_revoke_ctrl0 = 0;
-  cert_revoke_ctrl1 = 0;
-  cert_revoke_ctrl2 = 0;
+  cert_revoke_ctrl0 = 0xA8028A82;
+  cert_revoke_ctrl1 = 0xAAAAAAAA;
+  cert_revoke_ctrl2 = 0xAAAA;
   sha_msglen_lo = 0;
   sha_msglen_hi = 0;
   sha_msglen = 0;

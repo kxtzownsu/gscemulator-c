@@ -19,6 +19,8 @@
 #include <H1B3C/peripherals/watchdog.h>
 #include <H1B3C/peripherals/rbox.h>
 #include <H1B3C/peripherals/crypto.h>
+#include <H1B3C/peripherals/rdd.h>
+#include <H1B3C/peripherals/spi.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 

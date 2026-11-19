@@ -24,6 +24,8 @@ void initialize_peripherals(void) {
   Component *WATCHDOG = WATCHDOG_Initialize();
   Component *RBOX = RBOX_Initialize();
   Component *CRYPTO = CRYPTO_Initialize();
+  Component *RDD = RDD_Initialize();
+  Component *SPI = SPI_Initialize();
   MmioRegion regions[] = {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
@@ -45,7 +47,9 @@ void initialize_peripherals(void) {
     { .component = TIMELS, .base = REG_TIMELS_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = WATCHDOG, .base = REG_WATCHDOG_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = RBOX, .base = REG_RBOX_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = CRYPTO, .base = REG_CRYPTO_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
+    { .component = CRYPTO, .base = REG_CRYPTO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = RDD, .base = REG_RDD_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = SPI, .base = REG_SPI_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
   };
 
   if (
@@ -69,7 +73,9 @@ void initialize_peripherals(void) {
       TIMELS == NULL ||
       WATCHDOG == NULL ||
       RBOX == NULL ||
-      CRYPTO == NULL
+      CRYPTO == NULL ||
+      RDD == NULL ||
+      SPI == NULL
     ) {
     LOG_ERR("Failed to initialize peripherals\n");
     emu_exit(RC_CHIPEMU_FAILED_INIT);

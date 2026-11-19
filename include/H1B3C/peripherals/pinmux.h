@@ -21,6 +21,9 @@
 _Static_assert(REG_PINMUX_REG_COUNT * 4 == REG_PINMUX_HOLD_OFFSET + 4,
                "PINMUX register file must end at HOLD");
 
+uint32_t PINMUX_GetGpioPad(unsigned bank, unsigned pin);
+int PINMUX_PadLevel(uint32_t pad);
+
 Component *PINMUX_Initialize(void);
 
 #endif /* H1B3C_PERIPHERALS_PINMUX_H */

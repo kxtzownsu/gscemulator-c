@@ -58,7 +58,7 @@ static void enter_exception(uc_engine *uc, uint32_t exc_num) {
     exc_return = ipsr != 0 ? EXC_RETURN_HANDLER : EXC_RETURN_MSP;
   }
 
-  regs[0] = xpsr;
+  regs[0] = xpsr | (1u << 24);
   regs[1] = pc | 1u;
   regs[2] = lr;
   (void)uc_reg_read(uc, UC_ARM_REG_R12, &regs[3]);
@@ -159,8 +159,10 @@ static void handle_exc_return(uc_engine *uc) {
 
   {
     uint32_t ipsr = value & 0x1FFu;
+    uint32_t faultmask = 0;
 
     (void)uc_reg_write(uc, UC_ARM_REG_IPSR, &ipsr);
+    if (ipsr != 2) (void)uc_reg_write(uc, UC_ARM_REG_FAULTMASK, &faultmask);
   }
 }
 

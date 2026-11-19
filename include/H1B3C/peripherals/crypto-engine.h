@@ -27,6 +27,7 @@ uint32_t crypto_engine_get_dmem(uint32_t index);
 void crypto_engine_set_imem(uint32_t index, uint32_t value);
 uint32_t crypto_engine_get_imem(uint32_t index);
 CryptoEngineStatus crypto_engine_run(void);
+CryptoEngineStatus crypto_engine_run_batch(uint32_t max_steps, bool *done);
 const char *crypto_engine_status_string(CryptoEngineStatus status);
 
 #endif /* H1B3C_PERIPHERALS_CRYPTO_ENGINE_H */

@@ -25,6 +25,8 @@ COMPONENTS = [
     "WATCHDOG",
     "RBOX",
     "CRYPTO",
+    "RDD",
+    "SPI",
     "XO",
     "SWDP",
 ]

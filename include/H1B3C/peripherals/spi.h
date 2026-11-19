@@ -1,0 +1,21 @@
+#ifndef H1B3C_PERIPHERALS_SPI_H
+#define H1B3C_PERIPHERALS_SPI_H
+
+#include <common/peripherals/component.h>
+
+#define REG_SPI_BASE_ADDR 0x40700000
+#define REG_SPI_CTRL_OFFSET 0x0
+#define REG_SPI_XACT_OFFSET 0x4
+#define REG_SPI_ICTRL_OFFSET 0x8
+#define REG_SPI_ISTATE_OFFSET 0xC
+#define REG_SPI_ISTATE_CLR_OFFSET 0x10
+#define REG_SPI_OVRD_OFFSET 0x14
+#define REG_SPI_VAL_OFFSET 0x18
+#define REG_SPI_ITCR_OFFSET 0xF00
+#define REG_SPI_ITOP_OFFSET 0xF04
+#define REG_SPI_TX_DATA_OFFSET 0x1000
+#define REG_SPI_RX_DATA_OFFSET 0x1080
+
+Component *SPI_Initialize(void);
+
+#endif /* H1B3C_PERIPHERALS_SPI_H */

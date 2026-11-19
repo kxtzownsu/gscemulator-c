@@ -303,13 +303,9 @@ static void FLASH_Write(Component *self, uint64_t offset, unsigned size, uint64_
       protect_info1_erase = (uint32_t)value & 1u;
       return;
     case REG_FLASH_TIMING_PROG_SMART_ALGO_ON_OFFSET:
-      prog_smart_algo = (uint32_t)value & 1u;
-      return;
     case REG_FLASH_TIMING_ERASE_SMART_ALGO_ON_OFFSET:
-      erase_smart_algo = (uint32_t)value & 1u;
-      return;
     case REG_FLASH_TIMING_BULKERASE_SMART_ALGO_ON_OFFSET:
-      bulkerase_smart_algo = (uint32_t)value & 1u;
+      LOG_VBS("FLASH: ignored write to smart algorithm enable\n");
       return;
     case REG_FLASH_DOUT_VAL0_OFFSET:
     case REG_FLASH_DOUT_VAL1_OFFSET:
@@ -339,9 +335,9 @@ Component *FLASH_Initialize(void) {
   dout_val[0] = 0;
   dout_val[1] = 0;
   protect_info1_erase = 0;
-  prog_smart_algo = 0;
-  erase_smart_algo = 0;
-  bulkerase_smart_algo = 0;
+  prog_smart_algo = 1;
+  erase_smart_algo = 1;
+  bulkerase_smart_algo = 1;
 
   for (unsigned i = 0; i < REG_FLASH_WR_DATA_COUNT; i++) wr_data[i] = 0;
 

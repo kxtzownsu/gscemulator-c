@@ -901,19 +901,39 @@ static CryptoEngineStatus step(int *keep_running) {
   return CRYPTO_ENGINE_OK;
 }
 
-CryptoEngineStatus crypto_engine_run(void) {
-  uint32_t steps;
+CryptoEngineStatus crypto_engine_run_batch(uint32_t max_steps, bool *done) {
+  uint32_t i;
 
-  for (steps = 0; steps < ENGINE_MAX_STEPS; steps++) {
+  *done = false;
+  for (i = 0; i < max_steps; i++) {
     int keep_running;
     CryptoEngineStatus status = step(&keep_running);
 
     if (status != CRYPTO_ENGINE_OK) return status;
-    if (!keep_running) return CRYPTO_ENGINE_OK;
+    if (!keep_running) {
+      *done = true;
+      return CRYPTO_ENGINE_OK;
+    }
+  }
+
+  return CRYPTO_ENGINE_OK;
+}
+
+CryptoEngineStatus crypto_engine_run(void) {
+  uint32_t steps = 0;
+
+  while (steps < ENGINE_MAX_STEPS) {
+    bool done;
+    CryptoEngineStatus status = crypto_engine_run_batch(1, &done);
+
+    if (status != CRYPTO_ENGINE_OK) return status;
+    if (done) return CRYPTO_ENGINE_OK;
+    steps++;
   }
 
   return CRYPTO_ENGINE_ERR_STEP_LIMIT;
 }
+
 
 const char *crypto_engine_status_string(CryptoEngineStatus status) {
   switch (status) {

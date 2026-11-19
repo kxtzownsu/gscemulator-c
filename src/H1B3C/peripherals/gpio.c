@@ -1,11 +1,14 @@
 #include <H1B3C/peripherals/gpio.h>
+#include <H1B3C/peripherals/pinmux.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <common/logger.h>
 
 typedef struct {
+  unsigned bank;
   uint32_t dataout;
   uint32_t douten;
   uint32_t inten;
@@ -32,9 +35,25 @@ static uint64_t GPIO_Read(Component *self, uint64_t offset, unsigned size) {
   int index;
 
   switch (offset) {
-    case REG_GPIO_DATAIN_OFFSET:
-      LOG_VBS("GPIO: read DATAIN (size=%u) -> 0\n", size);
-      return 0;
+    case REG_GPIO_DATAIN_OFFSET: {
+      uint32_t value = 0;
+      unsigned pin;
+
+      for (pin = 0; pin < 16; pin++) {
+        bool level;
+
+        if ((state->douten & (1u << pin)) != 0) {
+          level = (state->dataout & (1u << pin)) != 0;
+        } else {
+          level = PINMUX_PadLevel(PINMUX_GetGpioPad(state->bank, pin)) != 0;
+        }
+
+        if (level) value |= 1u << pin;
+      }
+
+      LOG_VBS("GPIO: read DATAIN (size=%u) -> 0x%04x\n", size, value);
+      return value;
+    }
     case REG_GPIO_DOUT_OFFSET:
       LOG_VBS("GPIO: read DOUT (size=%u) -> 0x%04x\n", size, state->dataout);
       return state->dataout;
@@ -172,6 +191,7 @@ Component *GPIO_Initialize(unsigned bank) {
 
   name = bank == 0 ? "GPIO0" : "GPIO1";
   memset(&gpio_states[bank], 0, sizeof(gpio_states[bank]));
+  gpio_states[bank].bank = bank;
 
   return component_register(name, &gpio_states[bank], GPIO_Read, GPIO_Write);
 }

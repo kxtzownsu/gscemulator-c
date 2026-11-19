@@ -249,7 +249,7 @@ Thread/console smoke checks:
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then the RW banner (`--- UART initialized after reboot ---`, reset cause, image string, and `Inits done`), and keep running until interrupted.
+The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then the RW banner (`--- UART initialized after reboot ---`, reset cause, image string, and `Inits done`), the strap readings (`strap pin readings: a1:2 a9:2 a6:1 a12:1` and `Valid strap: 0xa`), `Running in FIPS 140-2 approved mode`, the `Console is enabled` banner, and keep running until interrupted.
 
 Pick the smallest set that fits the change:
 
