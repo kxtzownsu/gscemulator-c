@@ -48,6 +48,7 @@ gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/fuses.c -o /tmp/fuses.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/globalsec.c -o /tmp/globalsec.o
 gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/pmu.c -o /tmp/pmu.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/H1B3C/peripherals/pinmux.c -o /tmp/pinmux.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 
