@@ -10,6 +10,11 @@
 
 #define DUMMYKEY_COUNT 3
 
+#define GLOBALSEC_PERMISSION_LOW 0x00
+#define GLOBALSEC_PERMISSION_MEDIUM 0x33
+#define GLOBALSEC_PERMISSION_HIGH 0x3C
+#define GLOBALSEC_PERMISSION_HIGHEST 0x55
+
 DEFINE_BASIC_REGISTER(alert_control)
 DEFINE_BASIC_REGISTER(dbg_control)
 DEFINE_BASIC_REGISTER(alert_intr_sts0)
@@ -31,6 +36,7 @@ static const uint32_t dummykey_offsets[DUMMYKEY_COUNT] = {
 };
 
 static uint32_t sb_bl_sig[REG_GLOBALSEC_SB_BL_SIG_COUNT];
+static uint32_t permission_runlevel[REG_GLOBALSEC_PERMISSION_COUNT];
 static bool sb_comp_status;
 static uint32_t hide_rom;
 
@@ -41,6 +47,29 @@ static int region_index(uint64_t offset) {
   if (offset >= end) return -1;
 
   return (int)(offset / sizeof(uint32_t));
+}
+
+static int permission_index(uint64_t offset) {
+  uint64_t end = (uint64_t)REG_GLOBALSEC_CPU0_S_PERMISSION_OFFSET +
+                 (uint64_t)REG_GLOBALSEC_PERMISSION_COUNT * sizeof(uint32_t);
+
+  if ((offset & 3u) != 0) return -1;
+  if (offset < REG_GLOBALSEC_CPU0_S_PERMISSION_OFFSET || offset >= end) return -1;
+
+  return (int)((offset - REG_GLOBALSEC_CPU0_S_PERMISSION_OFFSET) / sizeof(uint32_t));
+}
+
+static uint32_t permission_decrement(uint32_t level) {
+  switch (level) {
+    case GLOBALSEC_PERMISSION_HIGHEST:
+      return GLOBALSEC_PERMISSION_HIGH;
+    case GLOBALSEC_PERMISSION_HIGH:
+      return GLOBALSEC_PERMISSION_MEDIUM;
+    case GLOBALSEC_PERMISSION_MEDIUM:
+      return GLOBALSEC_PERMISSION_LOW;
+    default:
+      return GLOBALSEC_PERMISSION_LOW;
+  }
 }
 
 static int dummykey_get_index(uint64_t offset) {
@@ -71,6 +100,13 @@ static uint64_t GLOBALSEC_Read(Component *self, uint64_t offset, unsigned size) 
   if (reg != NULL) {
     LOG_VBS("GLOBALSEC: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
     return *reg->value;
+  }
+
+  index = permission_index(offset);
+  if (index >= 0) {
+    LOG_VBS("GLOBALSEC: read PERMISSION[0x%03llx] (size=%u) -> 0x%02x\n",
+            (unsigned long long)offset, size, permission_runlevel[index]);
+    return permission_runlevel[index];
   }
 
   index = region_index(offset);
@@ -119,6 +155,14 @@ static void GLOBALSEC_Write(Component *self, uint64_t offset, unsigned size, uin
     return;
   }
 
+  index = permission_index(offset);
+  if (index >= 0) {
+    permission_runlevel[index] = permission_decrement(permission_runlevel[index]);
+    LOG_VBS("GLOBALSEC: wrote PERMISSION[0x%03llx] (size=%u) -> 0x%02x\n",
+            (unsigned long long)offset, size, permission_runlevel[index]);
+    return;
+  }
+
   index = region_index(offset);
   if (index >= 0) {
     region_regs[index] = (uint32_t)value;
@@ -163,6 +207,8 @@ static void GLOBALSEC_Write(Component *self, uint64_t offset, unsigned size, uin
 }
 
 Component *GLOBALSEC_Initialize(void) {
+  unsigned i;
+
   alert_control = 0;
   alert_intr_sts0 = 0;
   alert_intr_sts1 = 0;
@@ -173,6 +219,9 @@ Component *GLOBALSEC_Initialize(void) {
   memset(region_regs, 0, sizeof(region_regs));
   memset(dummykey, 0, sizeof(dummykey));
   memset(sb_bl_sig, 0, sizeof(sb_bl_sig));
+  for (i = 0; i < REG_GLOBALSEC_PERMISSION_COUNT; i++) {
+    permission_runlevel[i] = GLOBALSEC_PERMISSION_HIGHEST;
+  }
 
   return component_register("GLOBALSEC", NULL, GLOBALSEC_Read, GLOBALSEC_Write);
 }
