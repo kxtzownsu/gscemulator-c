@@ -11,6 +11,17 @@
 static void worker_submit(Worker *worker, WorkerOp *op, bool wait) {
   pthread_mutex_lock(&worker->lock);
 
+  if (worker->exited) {
+    bool async = op->async;
+
+    op->done = true;
+    op->result = 0;
+    pthread_mutex_unlock(&worker->lock);
+
+    if (async) free(op);
+    return;
+  }
+
   op->done = false;
   op->next = NULL;
 
@@ -45,7 +56,11 @@ static void *worker_main(void *arg) {
       pthread_cond_wait(&worker->wake, &worker->lock);
     }
 
-    if (worker->head == NULL && worker->stop) break;
+    if (worker->head == NULL && worker->stop) {
+      worker->exited = true;
+      pthread_cond_broadcast(&worker->done);
+      break;
+    }
 
     op = worker->head;
     worker->head = op->next;

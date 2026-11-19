@@ -239,7 +239,7 @@ Thread/console smoke checks:
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then stop on the unhandled PMU read at `0x4000000C` with status 246.
+The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then stop on the unhandled KEYMGR `SHA_USE_CERT` write at `0x40570494` with status 246.
 
 Pick the smallest set that fits the change:
 

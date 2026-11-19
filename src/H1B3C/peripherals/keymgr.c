@@ -13,10 +13,12 @@
 
 DEFINE_BASIC_REGISTER(rwr_vld)
 DEFINE_BASIC_REGISTER(rwr_lock)
+DEFINE_BASIC_REGISTER(cert_revoke_ctrl)
 
 static const BasicRegister keymgr_registers[] = {
   BASIC_REGISTER_ENTRY(REG_KEYMGR_RWR_VLD_OFFSET, rwr_vld),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_RWR_LOCK_OFFSET, rwr_lock),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_CERT_REVOKES_CTRL_OFFSET, cert_revoke_ctrl),
 };
 
 static uint32_t hkey_rwr[REG_KEYMGR_HKEY_RWR_COUNT];
@@ -58,6 +60,7 @@ static void sha_hash(void) {
   if (sha_msglen > KEYMGR_SHA_INPUT_MAX) {
     LOG_ERR("KEYMGR: SHA message length %llu is too large\n", (unsigned long long)sha_msglen);
     sha_receiving = false;
+    sha_itop = 1;
     return;
   }
 
@@ -92,7 +95,11 @@ static void sha_input_write(uint64_t value, unsigned size) {
     if (sha_input_len < KEYMGR_SHA_INPUT_MAX) sha_input[sha_input_len++] = (uint8_t)value;
   }
 
-  if (sha_msglen != 0 && sha_input_len >= sha_msglen) sha_hash();
+  if (sha_msglen != 0 && sha_input_len >= sha_msglen) {
+    sha_hash();
+  } else if (sha_msglen > KEYMGR_SHA_INPUT_MAX && sha_input_len == KEYMGR_SHA_INPUT_MAX) {
+    sha_hash();
+  }
 }
 
 static uint64_t KEYMGR_Read(Component *self, uint64_t offset, unsigned size) {

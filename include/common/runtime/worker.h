@@ -30,6 +30,7 @@ struct Worker {
   WorkerOp *tail;
   bool stop;
   bool started;
+  bool exited;
 };
 
 Worker *worker_start(const char *name);

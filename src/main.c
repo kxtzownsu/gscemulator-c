@@ -47,6 +47,8 @@ int main(int argc, char **argv) {
     emu_exit(RC_SUCCESS);
   }
 
+  argcheck_check_help(ctx.ac);
+
   if (console_arg == NULL || strcmp(console_arg, "none") == 0) {
     console_pts = 0;
   } else if (strcmp(console_arg, "pts") == 0) {
@@ -55,8 +57,6 @@ int main(int argc, char **argv) {
     LOG_ERR("Invalid console mode: %s\n", console_arg);
     emu_exit(RC_ARG_CONSOLE_INVALID);
   }
-
-  argcheck_check_help(ctx.ac);
 
   if (rom_path != NULL) {
     ctx.firmware.useBundledROM = false;
