@@ -7,18 +7,23 @@
 
 DEFINE_BASIC_REGISTER(demcr)
 DEFINE_BASIC_REGISTER(dwt_ctrl)
+DEFINE_BASIC_REGISTER(vtor)
 
 static uint32_t itcmcr;
 
 static const BasicRegister m3_registers[] = {
   BASIC_REGISTER_ENTRY(REG_M3_DEMCR_OFFSET, demcr),
   BASIC_REGISTER_ENTRY(REG_M3_DWT_CTRL_OFFSET, dwt_ctrl),
+  BASIC_REGISTER_ENTRY(REG_M3_VTOR_OFFSET, vtor),
 };
 
 static uint64_t M3_Read(Component *self, uint64_t offset, unsigned size) {
   const BasicRegister *reg = basic_register_find(m3_registers, ARRAY_LEN(m3_registers), offset);
 
   switch (offset) {
+    case REG_M3_DWT_CYCCNT_OFFSET:
+      LOG_VBS("M3: read DWT_CYCCNT (size=%u) -> 0\n", size);
+      return 0;
     case REG_M3_CPUID_OFFSET:
       LOG_VBS("M3: read CPUID (size=%u) -> 0x%08x\n", size, M3_CPUID_VALUE);
       return M3_CPUID_VALUE;
@@ -64,5 +69,6 @@ Component *M3_Initialize(void) {
   demcr = 0;
   dwt_ctrl = 0;
   itcmcr = 0;
+  vtor = 0;
   return component_register("M3", NULL, M3_Read, M3_Write);
 }

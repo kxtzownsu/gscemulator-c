@@ -26,6 +26,11 @@ static const BasicRegister trng_registers[] = {
 static uint64_t TRNG_Read(Component *self, uint64_t offset, unsigned size) {
   const BasicRegister *reg = basic_register_find(trng_registers, ARRAY_LEN(trng_registers), offset);
 
+  if (offset == REG_TRNG_READ_DATA_OFFSET) {
+    LOG_VBS("TRNG: read READ_DATA (size=%u) -> 0\n", size);
+    return 0;
+  }
+
   if (reg != NULL) {
     LOG_VBS("TRNG: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
     return *reg->value;
