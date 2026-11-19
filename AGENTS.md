@@ -239,7 +239,7 @@ Thread/console smoke checks:
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must stop at the same register/fault address and status as the pre-change build (currently UART `STATE` at `0x40600014`, status 246).
+The boot smoke test must stop at the same register/fault address and status as the pre-change build (currently SWDP `BUILD_DATE` at `0x40520030`, status 246, after printing the `Havn2|` banner).
 
 Pick the smallest set that fits the change:
 

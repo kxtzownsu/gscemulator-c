@@ -12,7 +12,7 @@
 - If the header defines `BUNDLED_H1B3C`, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN`; otherwise it exits 252. The exit status depends on the bundled image.
 - `./build/$(uname -m)/gscemu -r <bootrom> -v` runs the H1B3C lifecycle and prints verbose logs prefixed with the thread role (`[emu]`, `[UART]`, `[TRNG]`, `[control]`, ...). PMU is inline and logs as `[emu]`; UART and TRNG are the workers today.
 - A default build has 4 tasks (control, emu, UART, TRNG); `--console pts` adds the console task; `make SINGLE_THREAD=1` has 1.
-- The current H1B3C boot stops on the unhandled UART `STATE` read at `0x40600014` with status 246.
+- The current H1B3C boot prints the `Havn2|` banner and stops on the unmapped SWDP `BUILD_DATE` read at `0x40520030` with status 246.
 - `./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>` prints the pty slave path and relays stdin/stdout through it.
 - `make SINGLE_THREAD=1` runs emulation inline on the control thread and rejects `--console pts` with 244.
 - `make tsan` builds and the boot smoke test produces no ThreadSanitizer report.
