@@ -9,7 +9,12 @@
 #include <common/peripherals/define.h>
 #include <common/sha256.h>
 
-#define KEYMGR_SHA_INPUT_MAX 16384
+#define KEYMGR_SHA_EN_LIVESTREAM (1u << 4)
+#define KEYMGR_SHA_EN_INT_DONE (1u << 16)
+#define KEYMGR_SHA_TRIG_GO (1u << 0)
+#define KEYMGR_SHA_TRIG_RESET (1u << 1)
+#define KEYMGR_SHA_TRIG_STOP (1u << 3)
+#define KEYMGR_SHA_USE_CERT_ENABLE (1u << 6)
 
 DEFINE_BASIC_REGISTER(rwr_vld)
 DEFINE_BASIC_REGISTER(rwr_lock)
@@ -46,8 +51,8 @@ static uint32_t sha_key_w[REG_KEYMGR_SHA_KEY_W_COUNT];
 static uint32_t sha_use_cert;
 static uint32_t sha_cert_override;
 static uint32_t sha_rand_stall_ctl;
-static uint8_t sha_input[KEYMGR_SHA_INPUT_MAX];
-static size_t sha_input_len;
+static Sha256Context sha_context;
+static uint64_t sha_input_len;
 
 static int rwr_index(uint64_t offset) {
   uint64_t end =
@@ -79,20 +84,10 @@ static int key_w_index(uint64_t offset) {
 }
 
 static void sha_hash(void) {
-  Sha256Context context;
   uint8_t digest[32];
   unsigned i;
 
-  if (sha_msglen > KEYMGR_SHA_INPUT_MAX) {
-    LOG_ERR("KEYMGR: SHA message length %llu is too large\n", (unsigned long long)sha_msglen);
-    sha_receiving = false;
-    sha_itop = 1;
-    return;
-  }
-
-  sha256_init(&context);
-  sha256_update(&context, sha_input, (size_t)sha_msglen);
-  sha256_final(&context, digest);
+  sha256_final(&sha_context, digest);
 
   for (i = 0; i < 8; i++) {
     sha_sts_h[i] = (uint32_t)digest[4 * i] | ((uint32_t)digest[4 * i + 1] << 8) |
@@ -100,32 +95,36 @@ static void sha_hash(void) {
                    ((uint32_t)digest[4 * i + 3] << 24);
   }
 
-  sha_itop = 1;
+  if ((sha_en & KEYMGR_SHA_EN_INT_DONE) != 0) sha_itop = 1;
   sha_receiving = false;
-  sha_input_len = 0;
 
-  LOG_VBS("KEYMGR: SHA complete\n");
+  LOG_VBS("KEYMGR: SHA complete (%llu bytes)\n", (unsigned long long)sha_input_len);
+  sha_input_len = 0;
 }
 
 static void sha_input_write(uint64_t value, unsigned size) {
-  unsigned i;
+  uint8_t bytes[4];
+  bool oneshot = (sha_en & KEYMGR_SHA_EN_LIVESTREAM) == 0;
+  unsigned i, count;
 
   if (!sha_receiving) return;
+  if (size != 1 && size != 4) return;
 
-  if (size == 4) {
-    for (i = 0; i < 4; i++) {
-      if (sha_input_len >= KEYMGR_SHA_INPUT_MAX) break;
-      sha_input[sha_input_len++] = (uint8_t)(value >> (8 * i));
-    }
-  } else if (size == 1) {
-    if (sha_input_len < KEYMGR_SHA_INPUT_MAX) sha_input[sha_input_len++] = (uint8_t)value;
+  count = size == 4 ? 4 : 1;
+  for (i = 0; i < count; i++) bytes[i] = (uint8_t)(value >> (8 * i));
+
+  if (oneshot && sha_msglen != 0 && sha_input_len < sha_msglen) {
+    uint64_t remaining = sha_msglen - sha_input_len;
+
+    if (remaining < count) count = (unsigned)remaining;
   }
 
-  if (sha_msglen != 0 && sha_input_len >= sha_msglen) {
-    sha_hash();
-  } else if (sha_msglen > KEYMGR_SHA_INPUT_MAX && sha_input_len == KEYMGR_SHA_INPUT_MAX) {
-    sha_hash();
-  }
+  if (count == 0) return;
+
+  sha256_update(&sha_context, bytes, count);
+  sha_input_len += count;
+
+  if (oneshot && sha_msglen != 0 && sha_input_len >= sha_msglen) sha_hash();
 }
 
 static uint64_t KEYMGR_Read(Component *self, uint64_t offset, unsigned size) {
@@ -218,16 +217,22 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
 
   switch (offset) {
     case REG_KEYMGR_SHA_CFG_MSGLEN_LO_OFFSET:
+      LOG_VBS("KEYMGR: wrote SHA_CFG_MSGLEN_LO <- 0x%08x (receiving=%u)\n", (uint32_t)value,
+              sha_receiving);
       if (sha_receiving) return;
       sha_msglen_lo = (uint32_t)value;
       sha_msglen = ((uint64_t)sha_msglen_hi << 32) | sha_msglen_lo;
       return;
     case REG_KEYMGR_SHA_CFG_MSGLEN_HI_OFFSET:
+      LOG_VBS("KEYMGR: wrote SHA_CFG_MSGLEN_HI <- 0x%08x (receiving=%u)\n", (uint32_t)value,
+              sha_receiving);
       if (sha_receiving) return;
       sha_msglen_hi = (uint32_t)value;
       sha_msglen = ((uint64_t)sha_msglen_hi << 32) | sha_msglen_lo;
       return;
     case REG_KEYMGR_SHA_CFG_EN_OFFSET:
+      LOG_VBS("KEYMGR: wrote SHA_CFG_EN <- 0x%08x (receiving=%u)\n", (uint32_t)value,
+              sha_receiving);
       if (sha_receiving) return;
       sha_en = (uint32_t)value;
       return;
@@ -235,14 +240,27 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
       sha_wr_en = (uint32_t)value;
       return;
     case REG_KEYMGR_SHA_TRIG_OFFSET:
-      if (((uint32_t)value & 1u) != 0) {
+      LOG_VBS("KEYMGR: wrote SHA_TRIG <- 0x%08x (receiving=%u msglen=%llu)\n", (uint32_t)value,
+              sha_receiving, (unsigned long long)sha_msglen);
+      if (((uint32_t)value & KEYMGR_SHA_TRIG_GO) != 0) {
+        if ((sha_use_cert & KEYMGR_SHA_USE_CERT_ENABLE) != 0) {
+          sha_use_cert &= ~KEYMGR_SHA_USE_CERT_ENABLE;
+          sha_receiving = false;
+          sha_itop = 1;
+          LOG_VBS("KEYMGR: SHA cert use unsupported, completing\n");
+          return;
+        }
+
+        sha256_init(&sha_context);
         sha_input_len = 0;
         sha_itop = 0;
         sha_receiving = true;
-      } else if (((uint32_t)value & 2u) != 0) {
+      } else if (((uint32_t)value & KEYMGR_SHA_TRIG_RESET) != 0) {
         sha_receiving = false;
         sha_itop = 0;
         sha_input_len = 0;
+      } else if (((uint32_t)value & KEYMGR_SHA_TRIG_STOP) != 0) {
+        if ((sha_en & KEYMGR_SHA_EN_LIVESTREAM) != 0 && sha_receiving) sha_hash();
       }
       return;
     case REG_KEYMGR_SHA_INPUT_FIFO_OFFSET:
@@ -252,6 +270,7 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
       sha_itop = (uint32_t)value;
       return;
     case REG_KEYMGR_SHA_USE_CERT_OFFSET:
+      LOG_VBS("KEYMGR: wrote SHA_USE_CERT <- 0x%08x\n", (uint32_t)value);
       sha_use_cert = (uint32_t)value & 0xFFu;
       return;
     case REG_KEYMGR_SHA_CERT_OVERRIDE_OFFSET:
