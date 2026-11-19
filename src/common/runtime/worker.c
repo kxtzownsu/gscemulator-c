@@ -51,6 +51,8 @@ static void *worker_main(void *arg) {
     worker->head = op->next;
     if (worker->head == NULL) worker->tail = NULL;
 
+    bool async = op->async;
+
     pthread_mutex_unlock(&worker->lock);
 
     tctx.component = op->component;
@@ -71,7 +73,7 @@ static void *worker_main(void *arg) {
     pthread_cond_broadcast(&worker->done);
     pthread_mutex_unlock(&worker->lock);
 
-    if (op->async) free(op);
+    if (async) free(op);
 
     pthread_mutex_lock(&worker->lock);
   }
