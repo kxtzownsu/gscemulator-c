@@ -12,6 +12,7 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - `init_unicorn` installs the memory fault hook after `uc_open` and the Cortex-M3 model setup, so unmapped/protected accesses log the address, access type, and PC.
 - `Havn_StartEmulation` runs on T1, checks `memory_fault_occurred()` after `uc_emu_start`, and reports failures with `runtime_fault` before inspecting the engine error. It returns instead of exiting.
 - `ctx.firmware.progfw` / `--firmware` is loaded into the firmware region by `load_firmware`.
+- `proxies.c` owns the privileged proxy startup. `H1B3C_StartProxies` performs the root/module checks and starts the `vtpm-proxy` and `usb-proxy` threads; `H1B3C_StopProxies` wakes and joins them and runs from `Havn_EndEmulation`. The proxy transports are not implemented yet, so the threads currently report and idle.
 - Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set. `component_register_threaded` starts an opt-in worker; `component_register` keeps the handler inline on T1.
 - Register bases and offsets belong in the matching `include/H1B3C/peripherals/<name>.h`; `DEFAULT_REG_LENGTH` in `H1B3C/peripherals.h` is the MMIO region size for every peripheral except PMU (`REG_PMU_LENGTH`, `0x20000`). Keep offsets 4-byte aligned.
 

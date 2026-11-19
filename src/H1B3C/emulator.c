@@ -1,6 +1,7 @@
 #include <H1B3C/emulator.h>
 #include <H1B3C/memory.h>
 #include <H1B3C/peripherals.h>
+#include <H1B3C/proxies.h>
 
 #include <string.h>
 
@@ -419,6 +420,8 @@ void Havn_EndEmulation(void) {
   uc_err err;
 
   LOG_VBS("EndEmulation called\n");
+
+  H1B3C_StopProxies();
 
   if (ctx.uc == NULL) return;
 

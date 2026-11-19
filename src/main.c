@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <H1B3C/emulator.h>
+#include <H1B3C/proxies.h>
 #include <common/common.h>
 #include <common/runtime/console.h>
 #include <common/runtime/control.h>
@@ -26,6 +27,9 @@ int main(int argc, char **argv) {
   const char *console_arg;
   int path_len;
   int show_version;
+  int wait_for_enter;
+  int disable_tpm;
+  int disable_usb;
   int console_pts = 0;
 
   ctx_init();
@@ -42,6 +46,12 @@ int main(int argc, char **argv) {
   console_arg = argcheck_fequals(ctx.ac, "--console", NULL, "Console output [ none | pts ]");
   ctx.verbose = argcheck_fbool(ctx.ac, "--verbose", "-v", "Verbose output");
   show_version = argcheck_fbool(ctx.ac, "--version", NULL, "Show version information");
+  wait_for_enter = argcheck_fbool(ctx.ac, "--wait-for-enter", NULL,
+                                  "Wait for ENTER before starting emulation");
+  disable_tpm = argcheck_fbool(ctx.ac, "--disable-tpm-chardev", NULL,
+                               "Do not start the vTPM chardev proxy");
+  disable_usb = argcheck_fbool(ctx.ac, "--disable-usb-proxy", NULL,
+                               "Do not start the CCD USB proxy");
 
   if (show_version) {
     print_version();
@@ -106,6 +116,13 @@ int main(int argc, char **argv) {
 #else
   if (console_pts && !console_start()) emu_exit(RC_CHIPEMU_FAILED_INIT);
 #endif
+
+  if (wait_for_enter) {
+    LOG("Waiting for ENTER to start emulation...\n");
+    (void)console_wait_enter(NULL);
+  }
+
+  H1B3C_StartProxies(disable_tpm != 0, disable_usb != 0);
 
   runtime_start_emulation();
   runtime_run();

@@ -12,6 +12,7 @@ bool console_stdin_open(void);
 int console_stdio_fd(void);
 int console_uart_read(uint8_t *buf, size_t len);
 int console_uart_write(const uint8_t *buf, size_t len);
+bool console_wait_enter(const char *message);
 void console_pump_input(void);
 void console_pump_output(void);
 

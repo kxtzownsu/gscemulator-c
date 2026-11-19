@@ -257,6 +257,28 @@ int console_uart_write(const uint8_t *buf, size_t len) {
   return (int)count;
 }
 
+bool console_wait_enter(const char *message) {
+  char byte;
+
+  if (message != NULL) {
+    printf("%s\n", message);
+    fflush(stdout);
+  }
+
+  for (;;) {
+    ssize_t count = read(STDIN_FILENO, &byte, 1);
+
+    if (count == 1) {
+      if (byte == '\n' || byte == '\r') return true;
+      continue;
+    }
+
+    if (count == 0) return false;
+    if (errno == EINTR) continue;
+    return false;
+  }
+}
+
 void console_pump_input(void) {
   uint8_t buf[256];
   ssize_t count = read(STDIN_FILENO, buf, sizeof(buf));
