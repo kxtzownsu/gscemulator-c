@@ -23,6 +23,7 @@ _Static_assert(REG_PINMUX_REG_COUNT * 4 == REG_PINMUX_HOLD_OFFSET + 4,
 
 uint32_t PINMUX_GetGpioPad(unsigned bank, unsigned pin);
 int PINMUX_PadLevel(uint32_t pad);
+void PINMUX_SetPadLevel(uint32_t pad, int level);
 
 Component *PINMUX_Initialize(void);
 

@@ -7,6 +7,7 @@
 #define REG_RBOX_OFFSET 0x0
 #define REG_RBOX_COUNT 41
 #define REG_RBOX_INT_STATE_OFFSET 0x4
+#define REG_RBOX_ASSERT_EC_RST_OFFSET 0x10
 
 Component *RBOX_Initialize(void);
 

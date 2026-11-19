@@ -27,6 +27,7 @@ COMPONENTS = [
     "CRYPTO",
     "RDD",
     "SPI",
+    "SPS",
     "XO",
     "SWDP",
 ]

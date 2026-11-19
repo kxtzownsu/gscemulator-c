@@ -1,3 +1,5 @@
+#include <H1B3C/peripherals/gpio.h>
+#include <H1B3C/peripherals/pinmux.h>
 #include <H1B3C/peripherals/rbox.h>
 
 #include <stdint.h>
@@ -39,6 +41,10 @@ static void RBOX_Write(Component *self, uint64_t offset, unsigned size, uint64_t
 
   if (offset == REG_RBOX_INT_STATE_OFFSET) {
     rbox_regs[index] &= ~(uint32_t)value;
+  } else if (offset == REG_RBOX_ASSERT_EC_RST_OFFSET) {
+    rbox_regs[index] = (uint32_t)value & 1u;
+    PINMUX_SetPadLevel(0x1B, (uint32_t)value == 0);
+    GPIO_Refresh();
   } else {
     rbox_regs[index] = (uint32_t)value;
   }

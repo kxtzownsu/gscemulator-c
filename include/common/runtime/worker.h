@@ -9,6 +9,7 @@
 
 typedef struct WorkerOp {
   bool write;
+  bool poll;
   bool async;
   bool done;
   Component *component;
@@ -39,5 +40,6 @@ uint64_t worker_read(Worker *worker, Component *component, uint64_t offset, unsi
                      uint32_t pc);
 void worker_write(Worker *worker, Component *component, uint64_t offset, unsigned size,
                   uint64_t value, uint32_t pc, bool async);
+void worker_poll(Worker *worker, Component *component);
 
 #endif /* COMMON_RUNTIME_WORKER_H */

@@ -1,4 +1,5 @@
 #include <H1B3C/peripherals/gpio.h>
+#include <H1B3C/peripherals/m3.h>
 #include <H1B3C/peripherals/pinmux.h>
 
 #include <stdbool.h>
@@ -7,8 +8,15 @@
 
 #include <common/logger.h>
 
+#define GPIO0_PIN_IRQ0 65u
+#define GPIO1_PIN_IRQ0 82u
+#define GPIO0_COMB_IRQ 81u
+#define GPIO1_COMB_IRQ 98u
+#define GPIO_POLL_MASK 0x3Fu
+
 typedef struct {
   unsigned bank;
+  uint32_t levels;
   uint32_t dataout;
   uint32_t douten;
   uint32_t inten;
@@ -20,6 +28,106 @@ typedef struct {
 } GpioState;
 
 static GpioState gpio_states[2];
+
+static unsigned gpio_pin_irq(unsigned bank, unsigned pin) {
+  return (bank == 0 ? GPIO0_PIN_IRQ0 : GPIO1_PIN_IRQ0) + pin;
+}
+
+static unsigned gpio_comb_irq(unsigned bank) {
+  return bank == 0 ? GPIO0_COMB_IRQ : GPIO1_COMB_IRQ;
+}
+
+static uint32_t gpio_sample_levels(const GpioState *state) {
+  uint32_t levels = 0;
+  unsigned pin;
+
+  for (pin = 0; pin < 16; pin++) {
+    bool level;
+
+    if ((state->douten & (1u << pin)) != 0) {
+      level = (state->dataout & (1u << pin)) != 0;
+    } else {
+      level = PINMUX_PadLevel(PINMUX_GetGpioPad(state->bank, pin)) != 0;
+    }
+
+    if (level) levels |= 1u << pin;
+  }
+
+  return levels;
+}
+
+static void gpio_pend_pin(GpioState *state, unsigned pin) {
+  state->intstat |= 1u << pin;
+  M3_PendIrq(gpio_pin_irq(state->bank, pin));
+  M3_PendIrq(gpio_comb_irq(state->bank));
+}
+
+static void gpio_apply_levels(unsigned bank) {
+  GpioState *state = &gpio_states[bank];
+  uint32_t levels = gpio_sample_levels(state);
+  uint32_t changed = levels ^ state->levels;
+  unsigned pin;
+
+  state->levels = levels;
+
+  for (pin = 0; pin < 16; pin++) {
+    uint32_t bit = 1u << pin;
+    bool high = (levels & bit) != 0;
+    bool enabled = (state->inten & bit) != 0;
+    bool edge = (state->inttype & bit) != 0;
+    bool active = (state->intpol & bit) != 0;
+
+    if (!edge) {
+      if (high == active) {
+        if (enabled && (state->intstat & bit) == 0) gpio_pend_pin(state, pin);
+      } else if ((state->intstat & bit) != 0) {
+        state->intstat &= ~bit;
+        M3_UnpendIrq(gpio_pin_irq(bank, pin));
+        if (state->intstat == 0) M3_UnpendIrq(gpio_comb_irq(bank));
+      }
+      continue;
+    }
+
+    if ((changed & bit) == 0) continue;
+    if (!enabled || high != active) continue;
+    if ((state->intstat & bit) != 0) continue;
+
+    gpio_pend_pin(state, pin);
+  }
+}
+
+static void gpio_refresh_interrupts(unsigned bank) {
+  GpioState *state = &gpio_states[bank];
+  unsigned pin;
+
+  for (pin = 0; pin < 16; pin++) {
+    uint32_t bit = 1u << pin;
+    bool high = (state->levels & bit) != 0;
+    bool active = (state->intpol & bit) != 0;
+    bool edge = (state->inttype & bit) != 0;
+    bool fire;
+
+    if ((state->inten & bit) == 0) continue;
+    if ((state->intstat & bit) != 0) continue;
+
+    fire = edge ? (high && active) : (high == active);
+    if (fire) gpio_pend_pin(state, pin);
+  }
+}
+
+void GPIO_Refresh(void) {
+  gpio_apply_levels(0);
+  gpio_apply_levels(1);
+}
+
+void GPIO_Poll(void) {
+  static unsigned count;
+
+  if ((count++ & GPIO_POLL_MASK) != 0) return;
+
+  gpio_apply_levels(0);
+  gpio_apply_levels(1);
+}
 
 static int mask_index(uint64_t offset, uint32_t base) {
   uint64_t end = (uint64_t)base + (uint64_t)REG_GPIO_MASK_COUNT * sizeof(uint32_t);
@@ -51,6 +159,7 @@ static uint64_t GPIO_Read(Component *self, uint64_t offset, unsigned size) {
         if (level) value |= 1u << pin;
       }
 
+      state->levels = value;
       LOG_VBS("GPIO: read DATAIN (size=%u) -> 0x%04x\n", size, value);
       return value;
     }
@@ -134,6 +243,7 @@ static void GPIO_Write(Component *self, uint64_t offset, unsigned size, uint64_t
     case REG_GPIO_SETINTEN_OFFSET:
       state->inten |= bits;
       LOG_VBS("GPIO: wrote SETINTEN (size=%u) <- 0x%04x\n", size, state->inten);
+      gpio_refresh_interrupts(state->bank);
       return;
     case REG_GPIO_CLRINTEN_OFFSET:
       state->inten &= ~bits;
@@ -142,6 +252,7 @@ static void GPIO_Write(Component *self, uint64_t offset, unsigned size, uint64_t
     case REG_GPIO_SETINTTYPE_OFFSET:
       state->inttype |= bits;
       LOG_VBS("GPIO: wrote SETINTTYPE (size=%u) <- 0x%04x\n", size, state->inttype);
+      gpio_refresh_interrupts(state->bank);
       return;
     case REG_GPIO_CLRINTTYPE_OFFSET:
       state->inttype &= ~bits;
@@ -150,15 +261,23 @@ static void GPIO_Write(Component *self, uint64_t offset, unsigned size, uint64_t
     case REG_GPIO_SETINTPOL_OFFSET:
       state->intpol |= bits;
       LOG_VBS("GPIO: wrote SETINTPOL (size=%u) <- 0x%04x\n", size, state->intpol);
+      gpio_refresh_interrupts(state->bank);
       return;
     case REG_GPIO_CLRINTPOL_OFFSET:
       state->intpol &= ~bits;
       LOG_VBS("GPIO: wrote CLRINTPOL (size=%u) <- 0x%04x\n", size, state->intpol);
       return;
-    case REG_GPIO_CLRINTSTAT_OFFSET:
+    case REG_GPIO_CLRINTSTAT_OFFSET: {
+      unsigned pin;
+
       state->intstat &= ~bits;
+      for (pin = 0; pin < 16; pin++) {
+        if ((bits & (1u << pin)) != 0) M3_UnpendIrq(gpio_pin_irq(state->bank, pin));
+      }
+      if (state->intstat == 0) M3_UnpendIrq(gpio_comb_irq(state->bank));
       LOG_VBS("GPIO: wrote CLRINTSTAT (size=%u) <- 0x%04x\n", size, state->intstat);
       return;
+    }
     default:
       break;
   }

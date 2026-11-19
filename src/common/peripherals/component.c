@@ -72,6 +72,7 @@ Component *component_register(const char *name, void *state, ComponentRead read,
   component->state = state;
   component->read = read;
   component->write = write;
+  component->poll = NULL;
   component->worker = NULL;
 
   return component;
@@ -93,6 +94,27 @@ Component *component_register_threaded(const char *name, void *state, ComponentR
 
   return component;
 #endif
+}
+
+void component_set_poll(Component *component, ComponentPoll poll) {
+  if (component == NULL) return;
+
+  component->poll = poll;
+}
+
+void component_poll_all(void) {
+  size_t i;
+
+  for (i = 0; i < ctx.component_count; i++) {
+    Component *component = &ctx.components[i];
+
+    if (component->poll == NULL) continue;
+    if (component->worker != NULL) {
+      worker_poll(component->worker, component);
+    } else {
+      component->poll(component);
+    }
+  }
 }
 
 void component_stop_all(void) {

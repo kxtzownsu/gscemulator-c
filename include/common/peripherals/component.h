@@ -13,12 +13,14 @@ typedef struct Component Component;
 typedef struct Worker Worker;
 typedef uint64_t (*ComponentRead)(Component *self, uint64_t offset, unsigned size);
 typedef void (*ComponentWrite)(Component *self, uint64_t offset, unsigned size, uint64_t value);
+typedef void (*ComponentPoll)(Component *self);
 
 struct Component {
   const char *name;
   void *state;
   ComponentRead read;
   ComponentWrite write;
+  ComponentPoll poll;
   Worker *worker;
 };
 
@@ -30,6 +32,8 @@ typedef struct {
 
 Component *component_register(const char *name, void *state, ComponentRead read, ComponentWrite write);
 Component *component_register_threaded(const char *name, void *state, ComponentRead read, ComponentWrite write);
+void component_set_poll(Component *component, ComponentPoll poll);
+void component_poll_all(void);
 void component_stop_all(void);
 Component *component_find(const char *name);
 bool component_map_mmio(uc_engine *uc, const MmioRegion *regions, size_t count);

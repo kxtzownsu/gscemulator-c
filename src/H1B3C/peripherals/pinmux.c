@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <common/logger.h>
 #include <common/peripherals/define.h>
@@ -17,6 +18,7 @@ typedef enum {
 #define PINMUX_CTL_PU (1u << 4)
 
 static uint32_t pinmux_regs[REG_PINMUX_REG_COUNT];
+static int8_t pinmux_pad_levels[32];
 
 static const struct {
   uint32_t pad;
@@ -26,6 +28,7 @@ static const struct {
   { 0x10, 1 },
   { 0x13, 0 },
   { 0x0D, 0 },
+  { 0x1B, 1 },
 };
 
 static bool pinmux_lookup(uint64_t offset, PinmuxKind *kind) {
@@ -86,11 +89,18 @@ uint32_t PINMUX_GetGpioPad(unsigned bank, unsigned pin) {
   return pinmux_regs[(base + pin * 4u) / 4u] & 0x1Fu;
 }
 
+void PINMUX_SetPadLevel(uint32_t pad, int level) {
+  if (pad == 0 || pad > PINMUX_PAD_ID_MAX) return;
+
+  pinmux_pad_levels[pad] = (int8_t)(level != 0);
+}
+
 int PINMUX_PadLevel(uint32_t pad) {
   uint32_t ctl;
   unsigned i;
 
   if (pad == 0 || pad > PINMUX_PAD_ID_MAX) return 0;
+  if (pinmux_pad_levels[pad] >= 0) return pinmux_pad_levels[pad];
 
   ctl = pinmux_regs[((PINMUX_PAD_ID_MAX - pad) * 8u + 4u) / 4u];
   if ((ctl & PINMUX_CTL_PU) != 0) return 1;
@@ -104,5 +114,7 @@ int PINMUX_PadLevel(uint32_t pad) {
 }
 
 Component *PINMUX_Initialize(void) {
+  memset(pinmux_pad_levels, -1, sizeof(pinmux_pad_levels));
+
   return component_register("PINMUX", NULL, PINMUX_Read, PINMUX_Write);
 }

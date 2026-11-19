@@ -23,5 +23,7 @@
 #define REG_GPIO_MASK_COUNT 256
 
 Component *GPIO_Initialize(unsigned bank);
+void GPIO_Poll(void);
+void GPIO_Refresh(void);
 
 #endif /* H1B3C_PERIPHERALS_GPIO_H */

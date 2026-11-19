@@ -16,5 +16,6 @@
 #define REG_UART_FIFO_OFFSET 0x24
 
 Component *UART_Initialize(unsigned index);
+void UART_Poll(Component *self);
 
 #endif /* H1B3C_PERIPHERALS_UART_H */

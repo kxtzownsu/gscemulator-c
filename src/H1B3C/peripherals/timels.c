@@ -184,6 +184,9 @@ static void TIMELS_Write(Component *self, uint64_t offset, unsigned size, uint64
       if (enabled && !was_enabled) {
         if (timer->start_value == 0) timer->start_value = timer->load;
         timer->start_ns = timels_now_ns();
+        timer->status = 0;
+        timer->isr = 0;
+        timer->ipr = 0;
         timer->running = true;
       } else if (!enabled && was_enabled) {
         timer->start_value = timels_value(timer);
@@ -225,15 +228,23 @@ static void TIMELS_Write(Component *self, uint64_t offset, unsigned size, uint64
       return;
     case REG_TIMELS_TIMER_ISR_OFFSET:
       timer->isr &= ~v;
+      if (v != 0) timer->status &= ~1u;
       return;
     case REG_TIMELS_TIMER_IPR_OFFSET:
       timer->ipr &= ~v;
+      if (v != 0) timer->status &= ~1u;
       return;
     case REG_TIMELS_TIMER_IAR_OFFSET:
       timer->iar = v;
+      if (v != 0) {
+        timer->status = 0;
+        timer->isr = 0;
+        timer->ipr = 0;
+      }
       return;
     case REG_TIMELS_TIMER_WAKEUP_ACK_OFFSET:
       timer->wakeup_ack = v;
+      if (v != 0) timer->status &= ~1u;
       return;
     default:
       component_log_unhandled(self, "write", offset);

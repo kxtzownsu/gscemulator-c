@@ -95,7 +95,8 @@ if command -v gcc >/dev/null 2>&1; then
     src/H1B3C/peripherals/crypto.c \
     src/H1B3C/peripherals/crypto-engine.c \
     src/H1B3C/peripherals/rdd.c \
-    src/H1B3C/peripherals/spi.c; do
+    src/H1B3C/peripherals/spi.c \
+    src/H1B3C/peripherals/sps.c; do
     "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
   done
 fi

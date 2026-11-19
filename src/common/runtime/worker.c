@@ -74,7 +74,9 @@ static void *worker_main(void *arg) {
     tctx.mmio_pc = op->pc;
     tctx.mmio_pc_valid = true;
 
-    if (op->write) {
+    if (op->poll) {
+      if (op->component->poll != NULL) op->component->poll(op->component);
+    } else if (op->write) {
       op->component->write(op->component, op->offset, op->size, op->value);
     } else {
       op->result = op->component->read(op->component, op->offset, op->size);
@@ -151,6 +153,18 @@ void worker_stop(Worker *worker) {
   pthread_cond_destroy(&worker->wake);
   pthread_mutex_destroy(&worker->lock);
   free(worker);
+}
+
+void worker_poll(Worker *worker, Component *component) {
+  WorkerOp *op = calloc(1, sizeof(*op));
+
+  if (op == NULL) return;
+
+  op->poll = true;
+  op->async = true;
+  op->component = component;
+
+  worker_submit(worker, op, false);
 }
 
 uint64_t worker_read(Worker *worker, Component *component, uint64_t offset, unsigned size,

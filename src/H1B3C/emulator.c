@@ -181,6 +181,7 @@ static void wfi_skip_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
 }
 
 static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+  static uint64_t poll_count;
   uint32_t ipsr = 0;
   uint32_t primask = 0;
   uint32_t faultmask = 0;
@@ -196,6 +197,8 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
 
   TIMELS_Poll();
   GLOBALSEC_Poll();
+  GPIO_Poll();
+  if ((++poll_count & 0x3Fu) == 0) component_poll_all();
 
   exc = M3_TakeException(ipsr, primask != 0, faultmask != 0);
   if (exc <= 0) return;

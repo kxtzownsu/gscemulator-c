@@ -40,7 +40,7 @@ static void uart_tx_byte(UartState *uart, uint8_t byte) {
   M3_PendIrq(uart->tx_irq);
 }
 
-static bool uart_rx_poll(UartState *uart) {
+static bool uart_rx_fill(UartState *uart) {
   uint8_t byte;
 
   if (!uart->console) return false;
@@ -52,6 +52,12 @@ static bool uart_rx_poll(UartState *uart) {
   uart->rx_buffered = true;
   M3_PendIrq(uart->rx_irq);
   return true;
+}
+
+void UART_Poll(Component *self) {
+  UartState *uart = self->state;
+
+  (void)uart_rx_fill(uart);
 }
 
 static void uart_ctrl_process(UartState *uart, uint32_t ctrl) {
@@ -78,7 +84,7 @@ static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
         return 0;
       }
 
-      if (!uart_rx_poll(uart)) {
+      if (!uart_rx_fill(uart)) {
         uart->state |= 0x80u;
         return 0;
       }
@@ -86,7 +92,7 @@ static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
       uart->rdata = uart->rx_byte;
       uart->rx_buffered = false;
 
-      if (uart_rx_poll(uart)) {
+      if (uart_rx_fill(uart)) {
         uart->state &= ~0x80u;
       } else {
         uart->state |= 0x80u;
@@ -104,7 +110,7 @@ static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
       LOG_VBS("%s: read ICTRL (size=%u) -> 0x%08x\n", self->name, size, uart->ictrl);
       return uart->ictrl;
     case REG_UART_STATE_OFFSET:
-      if (uart_rx_poll(uart)) {
+      if (uart_rx_fill(uart)) {
         uart->state &= ~0x80u;
       } else {
         uart->state |= 0x80u;
@@ -178,7 +184,10 @@ Component *UART_Initialize(unsigned index) {
   uarts[index].rx_irq = index == 0 ? 174u : index == 1 ? 181u : 188u;
 
   if (index == 0) {
-    return component_register_threaded(name, &uarts[index], UART_Read, UART_Write);
+    Component *component = component_register_threaded(name, &uarts[index], UART_Read, UART_Write);
+
+    if (component != NULL) component_set_poll(component, UART_Poll);
+    return component;
   }
 
   return component_register(name, &uarts[index], UART_Read, UART_Write);

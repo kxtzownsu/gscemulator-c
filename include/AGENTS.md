@@ -13,7 +13,7 @@ Public headers. They define the contract for `src/`.
 - `common/memory-fault.h` owns `install_memory_fault_hook` and `memory_fault_occurred`. It logs unmapped/protected accesses with the address and PC, sets an atomic fault flag, and calls `uc_emu_stop`; keep the hook free of `emu_exit`/`uc_close`.
 - `common/runtime/control.h` owns `Runtime`, `runtime_init`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is the only fatal path callable from any thread; `runtime_run` owns teardown and the control poll loop.
 - `common/runtime/thread.h` owns `ThreadCtx` and the `tctx` thread-local (role, name, worker, component, MMIO PC snapshot). Keep it labels and scratch only; never store `ctx.uc`, `ctx.ac`, or the component array in it.
-- `common/runtime/worker.h` owns `Worker`, `WorkerOp`, `worker_start`, `worker_stop`, `worker_read`, and `worker_write`. Reads and default writes are synchronous; async writes are opt-in.
+- `common/runtime/worker.h` owns `Worker`, `WorkerOp`, `worker_start`, `worker_stop`, `worker_read`, `worker_write`, and `worker_poll`. Reads and default writes are synchronous; async writes and polls are opt-in.
 - `common/runtime/console.h` owns `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. T2 creates the pty; T0 owns stdio and the slave side; UART owns the master side.
 - `common/vtor.h` owns `set_sp_pc`. It takes the engine and vector-table base so chip callers stay in control of the address.
 - `common/sha256.h` owns the `Sha256Context` API used by the KEYMGR SHA engine. Keep it dependency-free and chip-agnostic.
@@ -23,7 +23,7 @@ Public headers. They define the contract for `src/`.
 - `common/exit.h` exposes `emu_exit`; it must stay `ARGCHECK_NORETURN` and control-thread-only.
 - `common/rc.h` owns `Rc`. Every exit path uses an `RC_*` value; add a new one instead of reusing an unrelated code.
 - `common/file.h` owns `FileRC` and the file helpers. Keep them free of `ctx` and `emu_exit`; they report failures with a code and treat `buffer_size` as including the trailing NUL.
-- `common/peripherals/component.h` owns the generic `Component` (including `Worker *worker`), `MmioRegion`, registry, mapping helpers, threaded registration, `component_stop_all`, and `component_log_unhandled`. Keep it chip-agnostic.
+- `common/peripherals/component.h` owns the generic `Component` (including `Worker *worker` and `ComponentPoll poll`), `MmioRegion`, registry, mapping helpers, threaded registration, `component_set_poll`, `component_poll_all`, `component_stop_all`, and `component_log_unhandled`. Keep it chip-agnostic. `component_poll_all` runs inline for plain components and queues a poll op for threaded ones; call it from the chip block hook, throttled.
 - `common/peripherals/define.h` owns `DEFINE_BASIC_REGISTER` (storage only), `BasicRegister`, `BASIC_REGISTER_ENTRY`, `basic_register_find`, and `ARRAY_LEN`. Use one table entry per plain register; keep switch cases only for side effects, read-only/constant values, validation, or per-instance/array state.
 - `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` and includes the per-peripheral headers; `H1B3C/peripherals/<name>.h` owns that peripheral's base address, register offsets, and init entry point. Keep every offset 4-byte aligned and add new registers to the matching peripheral header.
 - `H1B3C/memory.h` owns the H1B3C region macros and declares `H1B3C_EssentialMemoryArray`; define the table in `src/H1B3C/memory.c`.
