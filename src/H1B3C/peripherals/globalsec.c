@@ -32,6 +32,7 @@ static const uint32_t dummykey_offsets[DUMMYKEY_COUNT] = {
 
 static uint32_t sb_bl_sig[REG_GLOBALSEC_SB_BL_SIG_COUNT];
 static bool sb_comp_status;
+static uint32_t hide_rom;
 
 static int region_index(uint64_t offset) {
   uint64_t end = (uint64_t)REG_GLOBALSEC_REGION_COUNT * sizeof(uint32_t);
@@ -98,6 +99,9 @@ static uint64_t GLOBALSEC_Read(Component *self, uint64_t offset, unsigned size) 
     case REG_GLOBALSEC_SIG_UNLOCK_OFFSET:
       LOG_VBS("GLOBALSEC: read SIG_UNLOCK (size=%u) -> 0\n", size);
       return 0;
+    case REG_GLOBALSEC_HIDE_ROM_OFFSET:
+      LOG_VBS("GLOBALSEC: read HIDE_ROM (size=%u) -> 0x%08x\n", size, hide_rom);
+      return hide_rom;
     default:
       component_log_unhandled(self, "read", offset);
       return 0;
@@ -144,6 +148,14 @@ static void GLOBALSEC_Write(Component *self, uint64_t offset, unsigned size, uin
       sb_comp_status = true;
       LOG_VBS("GLOBALSEC: SIG_UNLOCK -> SB_COMP_STATUS %u\n", sb_comp_status);
       return;
+    case REG_GLOBALSEC_HIDE_ROM_OFFSET:
+      if (hide_rom != 0) {
+        LOG_VBS("GLOBALSEC: ignored write to locked HIDE_ROM\n");
+        return;
+      }
+      hide_rom = (uint32_t)value;
+      LOG_VBS("GLOBALSEC: wrote HIDE_ROM (size=%u) <- 0x%08x\n", size, hide_rom);
+      return;
     default:
       component_log_unhandled(self, "write", offset);
       return;
@@ -156,6 +168,7 @@ Component *GLOBALSEC_Initialize(void) {
   alert_intr_sts1 = 0;
   dbg_control = 0;
   sb_comp_status = false;
+  hide_rom = 0;
 
   memset(region_regs, 0, sizeof(region_regs));
   memset(dummykey, 0, sizeof(dummykey));

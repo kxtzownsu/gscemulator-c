@@ -20,6 +20,8 @@ static bool periph_clocks_en[PMU_PERIPH_CLOCK_COUNT];
 static uint32_t pwrdn_scratch[REG_PMU_PWRDN_SCRATCH_COUNT];
 static uint32_t pwrdn_scratch_lock[REG_PMU_PWRDN_SCRATCH_LOCK_COUNT];
 static bool rst_wr_en[REG_PMU_RST_WR_EN_COUNT];
+static uint32_t long_life_scratch[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
+static bool long_life_scratch_wr_en[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
 static uint32_t rstsrc;
 
 static int pwrdn_scratch_index(uint64_t offset) {
@@ -50,6 +52,16 @@ static int rst_index(uint64_t offset, uint32_t base, unsigned count) {
   }
 
   return -1;
+}
+
+static int long_life_scratch_index(uint64_t offset) {
+  uint64_t end = (uint64_t)REG_PMU_LONG_LIFE_SCRATCH_OFFSET +
+                 (uint64_t)REG_PMU_LONG_LIFE_SCRATCH_COUNT * sizeof(uint32_t);
+
+  if ((offset & 3u) != 0) return -1;
+  if (offset < REG_PMU_LONG_LIFE_SCRATCH_OFFSET || offset >= end) return -1;
+
+  return (int)((offset - REG_PMU_LONG_LIFE_SCRATCH_OFFSET) / sizeof(uint32_t));
 }
 
 static uint32_t pmu_periclk_value(unsigned base, unsigned count) {
@@ -106,6 +118,25 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
   if (scratch_index >= 0) {
     LOG_VBS("PMU: read RST%d (size=%u) -> 0\n", scratch_index, size);
     return 0;
+  }
+
+  scratch_index = long_life_scratch_index(offset);
+  if (scratch_index >= 0) {
+    LOG_VBS("PMU: read LONG_LIFE_SCRATCH%d (size=%u) -> 0x%08x\n", scratch_index, size,
+            long_life_scratch[scratch_index]);
+    return long_life_scratch[scratch_index];
+  }
+
+  if (offset == REG_PMU_LONG_LIFE_SCRATCH_WR_EN_OFFSET) {
+    uint32_t value = 0;
+    unsigned i;
+
+    for (i = 0; i < REG_PMU_LONG_LIFE_SCRATCH_COUNT; i++) {
+      if (long_life_scratch_wr_en[i]) value |= 1u << i;
+    }
+
+    LOG_VBS("PMU: read LONG_LIFE_SCRATCH_WR_EN (size=%u) -> 0x%08x\n", size, value);
+    return value;
   }
 
   switch (offset) {
@@ -181,6 +212,31 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
     return;
   }
 
+  scratch_index = long_life_scratch_index(offset);
+  if (scratch_index >= 0) {
+    if (!long_life_scratch_wr_en[scratch_index]) {
+      LOG_VBS("PMU: ignored write to locked LONG_LIFE_SCRATCH%d\n", scratch_index);
+      return;
+    }
+
+    long_life_scratch[scratch_index] = (uint32_t)value;
+    LOG_VBS("PMU: wrote LONG_LIFE_SCRATCH%d (size=%u) <- 0x%08x\n", scratch_index, size,
+            long_life_scratch[scratch_index]);
+    return;
+  }
+
+  if (offset == REG_PMU_LONG_LIFE_SCRATCH_WR_EN_OFFSET) {
+    unsigned i;
+
+    for (i = 0; i < REG_PMU_LONG_LIFE_SCRATCH_COUNT; i++) {
+      long_life_scratch_wr_en[i] = ((uint32_t)value & (1u << i)) != 0;
+    }
+
+    LOG_VBS("PMU: wrote LONG_LIFE_SCRATCH_WR_EN (size=%u) <- 0x%08x\n", size,
+            (uint32_t)value);
+    return;
+  }
+
   switch (offset) {
     case REG_PMU_RSTSRC_OFFSET:
       LOG_VBS("PMU: ignored write to RSTSRC\n");
@@ -213,6 +269,8 @@ Component *PMU_Initialize(void) {
   for (i = 0; i < REG_PMU_PWRDN_SCRATCH_COUNT; i++) pwrdn_scratch[i] = 0;
   for (i = 0; i < REG_PMU_PWRDN_SCRATCH_LOCK_COUNT; i++) pwrdn_scratch_lock[i] = 0;
   for (i = 0; i < REG_PMU_RST_WR_EN_COUNT; i++) rst_wr_en[i] = true;
+  for (i = 0; i < REG_PMU_LONG_LIFE_SCRATCH_COUNT; i++) long_life_scratch[i] = 0;
+  for (i = 0; i < REG_PMU_LONG_LIFE_SCRATCH_COUNT; i++) long_life_scratch_wr_en[i] = true;
 
   sw_pdb = 0;
   sw_pdb_secure = 0;
