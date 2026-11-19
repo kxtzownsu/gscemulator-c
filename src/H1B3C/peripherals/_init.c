@@ -19,7 +19,7 @@ void initialize_peripherals(void) {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = GLOBALSEC, .base = REG_GLOBALSEC_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = PMU, .base = REG_PMU_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = PMU, .base = REG_PMU_BASE_ADDR, .size = REG_PMU_LENGTH },
     { .component = PINMUX, .base = REG_PINMUX_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = UART, .base = REG_UART_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = TRNG, .base = REG_TRNG_BASE_ADDR, .size = DEFAULT_REG_LENGTH },

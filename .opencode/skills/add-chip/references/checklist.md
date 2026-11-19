@@ -13,6 +13,7 @@ Copy this list into the task and tick each item.
 - [ ] `initialize` installs `install_memory_fault_hook()` after `uc_open`, and `start_emulation` calls `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)` when `memory_fault_occurred()` is set
 - [ ] `include/<CHIP>/peripherals.h` defines `DEFAULT_REG_LENGTH`, and each `include/<CHIP>/peripherals/<name>.h` has its base and 4-byte-aligned offsets
 - [ ] `src/<CHIP>/peripherals/`: components registered with `component_register` / `component_register_threaded`, mapped in `initialize_peripherals()`, unknown offsets use `component_log_unhandled()`
+- [ ] register ranges audited with the `audit-mmio` skill: counts end at the next register, special registers are dispatched first, and headers carry `_Static_assert` guards
 - [ ] plain read/write registers use a `BasicRegister` table (`DEFINE_BASIC_REGISTER` + `BASIC_REGISTER_ENTRY` + `basic_register_find`); switch cases only for side effects, read-only/constant values, validation, or per-instance/array state
 - [ ] `src/<CHIP>/firmware/{bootrom,firmware}.bin`: inputs present and the chip added to `BUNDLED_CHIPS` and `CHIPS`
 - [ ] backend uses `BUNDLED_<CHIP>_*` under `#ifdef BUNDLED_<CHIP>` and sets `useBundledROM`/`useBundledFW` for empty paths

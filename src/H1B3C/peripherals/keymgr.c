@@ -46,7 +46,7 @@ static uint32_t sha_en;
 static uint32_t sha_wr_en;
 static bool sha_receiving;
 static uint32_t sha_itop;
-static uint32_t sha_sts_h[8];
+static uint32_t sha_sts_h[REG_KEYMGR_SHA_STS_H_COUNT];
 static uint32_t sha_key_w[REG_KEYMGR_SHA_KEY_W_COUNT];
 static uint32_t sha_use_cert;
 static uint32_t sha_cert_override;
@@ -65,7 +65,8 @@ static int rwr_index(uint64_t offset) {
 }
 
 static int sts_h_index(uint64_t offset) {
-  uint64_t end = REG_KEYMGR_SHA_STS_H0_OFFSET + 8u * sizeof(uint32_t);
+  uint64_t end = REG_KEYMGR_SHA_STS_H0_OFFSET +
+                 (uint64_t)REG_KEYMGR_SHA_STS_H_COUNT * sizeof(uint32_t);
 
   if ((offset & 3u) != 0) return -1;
   if (offset < REG_KEYMGR_SHA_STS_H0_OFFSET || offset >= end) return -1;
@@ -89,7 +90,7 @@ static void sha_hash(void) {
 
   sha256_final(&sha_context, digest);
 
-  for (i = 0; i < 8; i++) {
+  for (i = 0; i < REG_KEYMGR_SHA_STS_H_COUNT; i++) {
     sha_sts_h[i] = (uint32_t)digest[4 * i] | ((uint32_t)digest[4 * i + 1] << 8) |
                    ((uint32_t)digest[4 * i + 2] << 16) |
                    ((uint32_t)digest[4 * i + 3] << 24);
@@ -271,7 +272,7 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
       return;
     case REG_KEYMGR_SHA_USE_CERT_OFFSET:
       LOG_VBS("KEYMGR: wrote SHA_USE_CERT <- 0x%08x\n", (uint32_t)value);
-      sha_use_cert = (uint32_t)value & 0xFFu;
+      sha_use_cert = (uint32_t)value & 0x7Fu;
       return;
     case REG_KEYMGR_SHA_CERT_OVERRIDE_OFFSET:
       sha_cert_override =

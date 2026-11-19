@@ -45,6 +45,9 @@ readback blob is enough extra coverage, and it also exercises the worker when
 the component is threaded. Do not burn the full suite on one
 `DEFINE_BASIC_REGISTER`.
 
+For any register or range change, also load the `audit-mmio` skill and run its
+checker. Boot success is not register coverage.
+
 ## Thread and console checks
 
 ```bash

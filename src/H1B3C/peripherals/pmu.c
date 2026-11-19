@@ -8,12 +8,17 @@
 
 DEFINE_BASIC_REGISTER(sw_pdb)
 DEFINE_BASIC_REGISTER(sw_pdb_secure)
+DEFINE_BASIC_REGISTER(low_power_dis)
+DEFINE_BASIC_REGISTER(exitpd_mask)
 
 #define PMU_PERIPH_CLOCK_COUNT 48
+#define PMU_CHIP_ID_VALUE 0x4485694Du
 
 static const BasicRegister pmu_registers[] = {
   BASIC_REGISTER_ENTRY(REG_PMU_SW_PDB_OFFSET, sw_pdb),
   BASIC_REGISTER_ENTRY(REG_PMU_SW_PDB_SECURE_OFFSET, sw_pdb_secure),
+  BASIC_REGISTER_ENTRY(REG_PMU_LOW_POWER_DIS_OFFSET, low_power_dis),
+  BASIC_REGISTER_ENTRY(REG_PMU_EXITPD_MASK_OFFSET, exitpd_mask),
 };
 
 static bool periph_clocks_en[PMU_PERIPH_CLOCK_COUNT];
@@ -22,6 +27,7 @@ static uint32_t pwrdn_scratch_lock[REG_PMU_PWRDN_SCRATCH_LOCK_COUNT];
 static bool rst_wr_en[REG_PMU_RST_WR_EN_COUNT];
 static uint32_t long_life_scratch[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
 static bool long_life_scratch_wr_en[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
+static bool int_enable;
 static uint32_t rstsrc;
 
 static int pwrdn_scratch_index(uint64_t offset) {
@@ -143,6 +149,15 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
     case REG_PMU_RSTSRC_OFFSET:
       LOG_VBS("PMU: read RSTSRC (size=%u) -> 0x%08x\n", size, rstsrc);
       return rstsrc;
+    case REG_PMU_CLRRST_OFFSET:
+      LOG_VBS("PMU: read CLRRST (size=%u) -> 0\n", size);
+      return 0;
+    case REG_PMU_INT_ENABLE_OFFSET:
+      LOG_VBS("PMU: read INT_ENABLE (size=%u) -> %u\n", size, int_enable);
+      return int_enable;
+    case REG_PMU_CHIP_ID_OFFSET:
+      LOG_VBS("PMU: read CHIP_ID (size=%u) -> 0x%08x\n", size, PMU_CHIP_ID_VALUE);
+      return PMU_CHIP_ID_VALUE;
     case REG_PMU_PERICLKSET0_OFFSET:
       value = pmu_periclk_value(0, 32);
       LOG_VBS("PMU: read PERICLKSET0 (size=%u) -> 0x%08x\n", size, value);
@@ -208,7 +223,7 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
   scratch_index = rst_index(offset, REG_PMU_RST_OFFSET, REG_PMU_RST_COUNT);
   if (scratch_index >= 0) {
     LOG_VBS("PMU: reset %d requested (0x%08x), %s\n", scratch_index, (uint32_t)value,
-            rst_wr_en[scratch_index] ? "ignored" : "blocked");
+            rst_wr_en[scratch_index] ? "allowed" : "blocked");
     return;
   }
 
@@ -240,6 +255,17 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
   switch (offset) {
     case REG_PMU_RSTSRC_OFFSET:
       LOG_VBS("PMU: ignored write to RSTSRC\n");
+      return;
+    case REG_PMU_CLRRST_OFFSET:
+      if (value != 0) rstsrc = 0;
+      LOG_VBS("PMU: wrote CLRRST (size=%u) <- 0x%08x\n", size, (uint32_t)value);
+      return;
+    case REG_PMU_INT_ENABLE_OFFSET:
+      int_enable = value != 0;
+      LOG_VBS("PMU: wrote INT_ENABLE (size=%u) <- %u\n", size, int_enable);
+      return;
+    case REG_PMU_CHIP_ID_OFFSET:
+      LOG_VBS("PMU: ignored write to CHIP_ID\n");
       return;
     case REG_PMU_PERICLKSET0_OFFSET:
       pmu_periclk_apply(0, 32, (uint32_t)value, true);
@@ -274,6 +300,9 @@ Component *PMU_Initialize(void) {
 
   sw_pdb = 0;
   sw_pdb_secure = 0;
+  low_power_dis = 0;
+  exitpd_mask = 0;
+  int_enable = false;
   rstsrc = 0;
 
   return component_register("PMU", NULL, PMU_Read, PMU_Write);

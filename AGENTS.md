@@ -124,11 +124,21 @@ Peripherals:
 - `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. UART, TRNG, and KEYMGR are the threaded peripherals today; PMU and the rest are inline.
 - `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`. A threaded component's handlers run on its worker; everything else runs inline on the emulation thread.
 - `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC, then calls `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)`. On a worker it uses `tctx.mmio_pc`; it never reads unicorn from a worker and never calls `emu_exit`.
-- `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the MMIO region size. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
+- `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the default MMIO region size. PMU uses `REG_PMU_LENGTH` (`0x20000`) because `CHIP_ID` is at `0x1FFF8`. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
 - Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
 - Never call `emu_exit` or `uc_close` from an MMIO callback. Use `runtime_fault`; it records the first error, sets `shutting_down`, calls `uc_emu_stop`, and lets the control thread clean up.
 - Worker handlers must not call any `uc_*` API. If they need the PC, use the snapshot in `WorkerOp.pc` / `tctx.mmio_pc`.
 - Plain registers use the `BasicRegister` table: `DEFINE_BASIC_REGISTER(name)` declares the storage, `BASIC_REGISTER_ENTRY(offset, name)` adds it to a `static const BasicRegister <component>_registers[]`, and `basic_register_find(array, ARRAY_LEN(array), offset)` dispatches both read and write from that one entry. Do not add per-register read/write switch cases for plain registers. Keep switch cases only for side effects, read-only/constant values, value validation, table lookup, or per-instance/array state. Use `Component.state` for per-instance state.
+
+MMIO register rules:
+
+- Every handled offset is a named `REG_<COMPONENT>_<REGISTER>_OFFSET` macro in `include/H1B3C/peripherals/`. Do not put numeric MMIO offsets in handlers.
+- A range handler is only for a repeated register file whose entries all share one behavior. Its `*_COUNT` must end exactly at the next register, and the header must contain a `_Static_assert` proving the range does not overlap that register. Never widen a range count to cover an adjacent register; shrink or split the range.
+- A register with unique behavior inside a range must be dispatched before the range handler: runlevel, lock, clear-on-write, trigger, constant, read-only, or write-once.
+- Unknown offsets call `component_log_unhandled` and stop emulation. The only catch-all is FUSE blank reads and ignored writes, because upstream does the same. Any new exception needs a comment in `src/H1B3C/AGENTS.md` explaining why.
+- A component mapped by `initialize_peripherals()` must use the hardware MMIO size. PMU is `REG_PMU_LENGTH` (`0x20000`) because `CHIP_ID` is at `0x1FFF8`; everything else is `DEFAULT_REG_LENGTH` (`0x10000`).
+- Before adding, changing, or reviewing a register, load the `audit-mmio` skill and run its checker against `chip/haven/hw_b1_regdefs.h`. Compare the handler with the upstream component and `regdefs/registers.py`, not just the offset.
+- A successful boot is not register coverage. The ROM only exercises the paths it takes; a silent catch-all can answer an access that should have faulted.
 
 Threads:
 

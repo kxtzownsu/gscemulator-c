@@ -15,6 +15,10 @@
 #define REG_FLASH_PE_EN_OFFSET 0xC8
 #define REG_FLASH_ERROR_OFFSET 0xD4
 
+_Static_assert(REG_FLASH_WR_DATA0_OFFSET + REG_FLASH_WR_DATA_COUNT * 4 <=
+                   REG_FLASH_PE_EN_OFFSET,
+               "FLASH WR_DATA overlaps PE_EN");
+
 Component *FLASH_Initialize(void);
 
 #endif /* H1B3C_PERIPHERALS_FLASH_H */

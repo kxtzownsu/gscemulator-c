@@ -18,6 +18,9 @@
 #define REG_PINMUX_EXITINV0_OFFSET 0x28C
 #define REG_PINMUX_HOLD_OFFSET 0x290
 
+_Static_assert(REG_PINMUX_REG_COUNT * 4 == REG_PINMUX_HOLD_OFFSET + 4,
+               "PINMUX register file must end at HOLD");
+
 Component *PINMUX_Initialize(void);
 
 #endif /* H1B3C_PERIPHERALS_PINMUX_H */
