@@ -17,6 +17,7 @@ Public headers. They define the contract for `src/`.
 - `common/runtime/console.h` owns `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. T2 creates the pty; T0 owns stdio and the slave side; UART owns the master side.
 - `common/vtor.h` owns `set_sp_pc`. It takes the engine and vector-table base so chip callers stay in control of the address.
 - `common/sha256.h` owns the `Sha256Context` API used by the KEYMGR SHA engine. Keep it dependency-free and chip-agnostic.
+- `common/aes.h` owns the `AesContext` block-cipher API used by the KEYMGR AES engine. It covers 128/192/256-bit keys and single-block encrypt/decrypt; modes and FIFOs stay in the chip component.
 - `common/ctx.h` declares the global `Ctx ctx` container and `ctx_init`. Keep it a plain data struct; resource ownership stays with the code that created the resource, and `ctx.verbose` is the only verbose switch. `ctx.firmware` holds the fixed `char[MAX_FILE_PATH]` paths plus the `useBundledROM`/`useBundledFW` flags; `main` fills them from `--bootrom`/`--firmware` and the backend decides whether to read a file or use the bundled arrays. Copy CLI strings in, never store `ArgCheck` pointers.
 - `common/emulator.h` owns `Emulator` and `EmulatorChips`. Keep them chip-agnostic. Adding a field or changing a function pointer signature requires updating every backend and `get_chipemu`.
 - `common/exit.h` exposes `emu_exit`; it must stay `ARGCHECK_NORETURN` and control-thread-only.
@@ -27,5 +28,6 @@ Public headers. They define the contract for `src/`.
 - `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` and includes the per-peripheral headers; `H1B3C/peripherals/<name>.h` owns that peripheral's base address, register offsets, and init entry point. Keep every offset 4-byte aligned and add new registers to the matching peripheral header.
 - `H1B3C/memory.h` owns the H1B3C region macros and declares `H1B3C_EssentialMemoryArray`; define the table in `src/H1B3C/memory.c`.
 - `H1B3C/peripherals/*.h` expose component init entry points; `initialize_peripherals` stays in `H1B3C/peripherals.h`.
+- `H1B3C/peripherals/crypto-engine.h` exposes the CRYPTO bignum program engine (IMEM/DMEM access plus a run entry point). Keep its state inside `crypto-engine.c`; the component owns the register interface.
 - Chip headers expose only lifecycle entry points. Chip-specific state and helpers stay in `src/<chip>/`.
 - Keep prototypes in sync with definitions. A header change is not complete until all implementations, `main.c`, and the fuzz harness compile.

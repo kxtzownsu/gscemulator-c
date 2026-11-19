@@ -10,6 +10,8 @@
 #include <common/runtime/console.h>
 
 typedef struct {
+  unsigned tx_irq;
+  unsigned rx_irq;
   uint32_t nco;
   uint32_t ictrl;
   uint32_t fifo;
@@ -29,13 +31,13 @@ static void uart_tx_byte(UartState *uart, uint8_t byte) {
   if (!uart->console) return;
 
   if (console_active() && console_uart_write(&byte, 1) == 1) {
-    M3_PendIrq(177);
+    M3_PendIrq(uart->tx_irq);
     return;
   }
 
   written = write(STDOUT_FILENO, &byte, 1);
   (void)written;
-  if (uart->console) M3_PendIrq(177);
+  M3_PendIrq(uart->tx_irq);
 }
 
 static bool uart_rx_poll(UartState *uart) {
@@ -48,7 +50,7 @@ static bool uart_rx_poll(UartState *uart) {
 
   uart->rx_byte = byte;
   uart->rx_buffered = true;
-  M3_PendIrq(174);
+  M3_PendIrq(uart->rx_irq);
   return true;
 }
 
@@ -172,6 +174,8 @@ Component *UART_Initialize(unsigned index) {
   memset(&uarts[index], 0, sizeof(uarts[index]));
   uarts[index].state = 1;
   uarts[index].console = index == 0;
+  uarts[index].tx_irq = index == 0 ? 177u : index == 1 ? 184u : 191u;
+  uarts[index].rx_irq = index == 0 ? 174u : index == 1 ? 181u : 188u;
 
   if (index == 0) {
     return component_register_threaded(name, &uarts[index], UART_Read, UART_Write);

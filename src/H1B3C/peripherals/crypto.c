@@ -1,13 +1,21 @@
 #include <H1B3C/peripherals/crypto.h>
+#include <H1B3C/peripherals/crypto-engine.h>
+#include <H1B3C/peripherals/m3.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <common/logger.h>
 
+#define CRYPTO_HOST_CMD_BASE 0x08000000u
+#define CRYPTO_INT_HOST_CMD_RECV (1u << 0)
+#define CRYPTO_INT_HOST_CMD_DONE (1u << 1)
+#define CRYPTO_INT_PC_STACK_OVERFLOW (1u << 2)
+#define CRYPTO_IRQ_HOST_CMD_DONE 4u
+
 static uint32_t crypto_regs[REG_CRYPTO_COUNT];
-static uint32_t crypto_dmem[REG_CRYPTO_DMEM_COUNT];
-static uint32_t crypto_imem[REG_CRYPTO_IMEM_COUNT];
+static uint32_t crypto_int_state;
 
 static int crypto_index(uint64_t offset) {
   uint64_t end = (uint64_t)REG_CRYPTO_OFFSET + (uint64_t)REG_CRYPTO_COUNT * sizeof(uint32_t);
@@ -18,24 +26,39 @@ static int crypto_index(uint64_t offset) {
   return (int)((offset - REG_CRYPTO_OFFSET) / sizeof(uint32_t));
 }
 
-static int dmem_index(uint64_t offset) {
-  uint64_t end = (uint64_t)REG_CRYPTO_DMEM_OFFSET +
-                 (uint64_t)REG_CRYPTO_DMEM_COUNT * sizeof(uint32_t);
-
-  if ((offset & 3u) != 0) return -1;
-  if (offset < REG_CRYPTO_DMEM_OFFSET || offset >= end) return -1;
-
-  return (int)((offset - REG_CRYPTO_DMEM_OFFSET) / sizeof(uint32_t));
+static void crypto_complete(void) {
+  crypto_int_state |= CRYPTO_INT_HOST_CMD_DONE;
+  M3_PendIrq(CRYPTO_IRQ_HOST_CMD_DONE);
 }
 
-static int imem_index(uint64_t offset) {
-  uint64_t end = (uint64_t)REG_CRYPTO_IMEM_OFFSET +
-                 (uint64_t)REG_CRYPTO_IMEM_COUNT * sizeof(uint32_t);
+static void crypto_run_host_cmd(uint32_t value) {
+  CryptoEngineStatus status;
+  uint32_t entry;
 
-  if ((offset & 3u) != 0) return -1;
-  if (offset < REG_CRYPTO_IMEM_OFFSET || offset >= end) return -1;
+  crypto_int_state |= CRYPTO_INT_HOST_CMD_RECV;
 
-  return (int)((offset - REG_CRYPTO_IMEM_OFFSET) / sizeof(uint32_t));
+  if (value < CRYPTO_HOST_CMD_BASE) {
+    LOG_VBS("CRYPTO: host command 0x%08x below the IMEM base\n", value);
+    crypto_int_state |= CRYPTO_INT_PC_STACK_OVERFLOW;
+    crypto_complete();
+    return;
+  }
+
+  entry = value - CRYPTO_HOST_CMD_BASE;
+  if (entry >= CRYPTO_ENGINE_IMEM_WORDS) {
+    LOG_VBS("CRYPTO: host command entry %u is outside IMEM\n", entry);
+    crypto_int_state |= CRYPTO_INT_PC_STACK_OVERFLOW;
+    crypto_complete();
+    return;
+  }
+
+  crypto_engine_set_pc(entry);
+  status = crypto_engine_run();
+  if (status != CRYPTO_ENGINE_OK) {
+    LOG_VBS("CRYPTO: engine stopped: %s\n", crypto_engine_status_string(status));
+  }
+
+  crypto_complete();
 }
 
 static uint64_t CRYPTO_Read(Component *self, uint64_t offset, unsigned size) {
@@ -43,16 +66,33 @@ static uint64_t CRYPTO_Read(Component *self, uint64_t offset, unsigned size) {
 
   index = crypto_index(offset);
   if (index >= 0) {
+    switch (offset) {
+      case REG_CRYPTO_CONTROL_OFFSET:
+        return 0;
+      case REG_CRYPTO_INT_STATE_OFFSET:
+        return crypto_int_state;
+      case REG_CRYPTO_HOST_CMD_OFFSET:
+        return 0;
+      case REG_CRYPTO_WIPE_SECRETS_OFFSET:
+        return 0;
+      default:
+        break;
+    }
+
     LOG_VBS("CRYPTO: read 0x%03llx (size=%u) -> 0x%08x\n", (unsigned long long)offset, size,
             crypto_regs[index]);
     return crypto_regs[index];
   }
 
-  index = dmem_index(offset);
-  if (index >= 0) return crypto_dmem[index];
+  if (offset >= REG_CRYPTO_DMEM_OFFSET &&
+      offset < REG_CRYPTO_DMEM_OFFSET + (uint64_t)REG_CRYPTO_DMEM_COUNT * 4u) {
+    return crypto_engine_get_dmem((uint32_t)((offset - REG_CRYPTO_DMEM_OFFSET) / 4u));
+  }
 
-  index = imem_index(offset);
-  if (index >= 0) return crypto_imem[index];
+  if (offset >= REG_CRYPTO_IMEM_OFFSET &&
+      offset < REG_CRYPTO_IMEM_OFFSET + (uint64_t)REG_CRYPTO_IMEM_COUNT * 4u) {
+    return crypto_engine_get_imem((uint32_t)((offset - REG_CRYPTO_IMEM_OFFSET) / 4u));
+  }
 
   component_log_unhandled(self, "read", offset);
   return 0;
@@ -63,34 +103,55 @@ static void CRYPTO_Write(Component *self, uint64_t offset, unsigned size, uint64
 
   index = crypto_index(offset);
   if (index >= 0) {
-    crypto_regs[index] = (uint32_t)value;
+    switch (offset) {
+      case REG_CRYPTO_CONTROL_OFFSET: {
+        uint32_t control = (uint32_t)value & 7u;
 
-    if (offset == REG_CRYPTO_HOST_CMD_OFFSET) {
-      crypto_regs[REG_CRYPTO_INT_STATE_OFFSET / 4] |= 2u;
-    } else if (offset == REG_CRYPTO_INT_STATE_OFFSET) {
-      crypto_regs[index] &= ~(uint32_t)value;
-    } else if (offset == REG_CRYPTO_CONTROL_OFFSET && ((uint32_t)value & 1u) != 0) {
-      memset(crypto_dmem, 0, sizeof(crypto_dmem));
-      memset(crypto_imem, 0, sizeof(crypto_imem));
-    } else if (offset == REG_CRYPTO_WIPE_SECRETS_OFFSET && value != 0) {
-      memset(crypto_dmem, 0, sizeof(crypto_dmem));
-      memset(crypto_imem, 0, sizeof(crypto_imem));
+        if ((control & (control - 1u)) != 0) return;
+
+        if ((control & 1u) != 0) {
+          crypto_engine_reset(true, true);
+          crypto_int_state = 0;
+        }
+
+        crypto_regs[index] = 0;
+        LOG_VBS("CRYPTO: wrote CONTROL (size=%u) <- 0x%08x\n", size, control);
+        return;
+      }
+      case REG_CRYPTO_INT_STATE_OFFSET:
+        crypto_int_state &= ~(uint32_t)value;
+        return;
+      case REG_CRYPTO_HOST_CMD_OFFSET:
+        LOG_VBS("CRYPTO: host command 0x%08x\n", (uint32_t)value);
+        crypto_run_host_cmd((uint32_t)value);
+        crypto_regs[index] = 0;
+        return;
+      case REG_CRYPTO_WIPE_SECRETS_OFFSET:
+        if (value != 0) {
+          crypto_engine_reset(true, true);
+          crypto_int_state = 0;
+        }
+        crypto_regs[index] = 0;
+        return;
+      default:
+        break;
     }
 
+    crypto_regs[index] = (uint32_t)value;
     LOG_VBS("CRYPTO: wrote 0x%03llx (size=%u) <- 0x%08x\n", (unsigned long long)offset, size,
             crypto_regs[index]);
     return;
   }
 
-  index = dmem_index(offset);
-  if (index >= 0) {
-    crypto_dmem[index] = (uint32_t)value;
+  if (offset >= REG_CRYPTO_DMEM_OFFSET &&
+      offset < REG_CRYPTO_DMEM_OFFSET + (uint64_t)REG_CRYPTO_DMEM_COUNT * 4u) {
+    crypto_engine_set_dmem((uint32_t)((offset - REG_CRYPTO_DMEM_OFFSET) / 4u), (uint32_t)value);
     return;
   }
 
-  index = imem_index(offset);
-  if (index >= 0) {
-    crypto_imem[index] = (uint32_t)value;
+  if (offset >= REG_CRYPTO_IMEM_OFFSET &&
+      offset < REG_CRYPTO_IMEM_OFFSET + (uint64_t)REG_CRYPTO_IMEM_COUNT * 4u) {
+    crypto_engine_set_imem((uint32_t)((offset - REG_CRYPTO_IMEM_OFFSET) / 4u), (uint32_t)value);
     return;
   }
 
@@ -99,8 +160,8 @@ static void CRYPTO_Write(Component *self, uint64_t offset, unsigned size, uint64
 
 Component *CRYPTO_Initialize(void) {
   memset(crypto_regs, 0, sizeof(crypto_regs));
-  memset(crypto_dmem, 0, sizeof(crypto_dmem));
-  memset(crypto_imem, 0, sizeof(crypto_imem));
+  crypto_int_state = 0;
+  crypto_engine_reset(true, true);
 
   return component_register("CRYPTO", NULL, CRYPTO_Read, CRYPTO_Write);
 }

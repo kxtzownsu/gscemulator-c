@@ -174,7 +174,7 @@ Return codes:
 
 - `common/rc.h` defines `Rc`. Every `emu_exit` call, `exit` call, and `main` return uses an `RC_*` value; never pass a raw number.
 - `RC_SUCCESS` covers a normal run and the help path.
-- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_CONSOLE_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, `RC_CHIPEMU_MEMORY_FAULT`, `RC_RUNTIME_INTERRUPTED`, and `RC_LOGGER_INVALID_TYPE` cover failures.
+- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_CONSOLE_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, `RC_CHIPEMU_MEMORY_FAULT`, `RC_CHIPEMU_ALERT_SHUTDOWN`, `RC_RUNTIME_INTERRUPTED`, and `RC_LOGGER_INVALID_TYPE` cover failures.
 - Values are negative, so the process status is the low byte (`RC_ARG_CHIP_INVALID` reports as 254). Add a new `RC_*` value instead of reusing an unrelated one.
 
 Version:

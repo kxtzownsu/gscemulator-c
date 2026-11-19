@@ -95,6 +95,7 @@ static void enter_exception(uc_engine *uc, uint32_t exc_num) {
 
 static void handle_svc(uc_engine *uc) {
   uint32_t pc = 0;
+  uint32_t ipsr = 0;
   uint32_t ret_pc;
   uint16_t insn = 0;
 
@@ -107,6 +108,16 @@ static void handle_svc(uc_engine *uc) {
   }
 
   (void)uc_reg_write(uc, UC_ARM_REG_PC, &ret_pc);
+  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
+
+  if (ipsr != 0 && M3_ExceptionPriority(11) >= M3_ExceptionPriority(ipsr)) {
+    unsigned exc = M3_EscalateFault(M3_FAULT_HARD, 0);
+
+    LOG_VBS("SVC: priority blocked by exception %u, escalating to %u\n", ipsr, exc);
+    enter_exception(uc, exc);
+    return;
+  }
+
   enter_exception(uc, 11);
 }
 
@@ -147,9 +158,9 @@ static void handle_exc_return(uc_engine *uc) {
   }
 
   {
-    uint32_t zero = 0;
+    uint32_t ipsr = value & 0x1FFu;
 
-    (void)uc_reg_write(uc, UC_ARM_REG_IPSR, &zero);
+    (void)uc_reg_write(uc, UC_ARM_REG_IPSR, &ipsr);
   }
 }
 
@@ -171,23 +182,57 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
   uint32_t ipsr = 0;
   uint32_t primask = 0;
   uint32_t faultmask = 0;
-  int irq;
+  int exc;
 
   (void)address;
   (void)size;
   (void)user_data;
 
   (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
-  if (ipsr != 0) return;
-
   (void)uc_reg_read(uc, UC_ARM_REG_PRIMASK, &primask);
   (void)uc_reg_read(uc, UC_ARM_REG_FAULTMASK, &faultmask);
-  if (primask != 0 || faultmask != 0) return;
 
   TIMELS_Poll();
+  GLOBALSEC_Poll();
 
-  irq = M3_TakePendingIrq();
-  if (irq >= 0) enter_exception(uc, 16u + (uint32_t)irq);
+  exc = M3_TakeException(ipsr, primask != 0, faultmask != 0);
+  if (exc <= 0) return;
+
+  if (ipsr != 0) {
+    LOG_VBS("Exception %d: preempting exception %u\n", exc, ipsr);
+  }
+  enter_exception(uc, (unsigned)exc);
+}
+
+static bool escalate_unicorn_error(uc_engine *uc, uc_err err) {
+  unsigned kind;
+  uint32_t status;
+  uint32_t ipsr = 0;
+  unsigned exc;
+
+  switch (err) {
+    case UC_ERR_INSN_INVALID:
+    case UC_ERR_EXCEPTION:
+      kind = M3_FAULT_USAGE;
+      status = 1u << 16;
+      break;
+    case UC_ERR_READ_UNALIGNED:
+    case UC_ERR_WRITE_UNALIGNED:
+    case UC_ERR_FETCH_UNALIGNED:
+      kind = M3_FAULT_USAGE;
+      status = 1u << 20;
+      break;
+    default:
+      return false;
+  }
+
+  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
+  if (ipsr == 2 || ipsr == 3) return false;
+
+  exc = M3_EscalateFault(kind, status);
+  LOG_VBS("Escalated %s to exception %u\n", uc_strerror(err), exc);
+  enter_exception(uc, exc);
+  return true;
 }
 
 static void intr_hook(uc_engine *uc, uint32_t intno, void *user_data) {
@@ -324,7 +369,15 @@ void Havn_StartEmulation(void) {
 
   M3_StartCycleCount();
 
-  err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
+  for (;;) {
+    err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
+    if (err == UC_ERR_OK) break;
+    if (memory_fault_occurred()) break;
+    if (!escalate_unicorn_error(ctx.uc, err)) break;
+
+    if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) break;
+    pc |= 1u;
+  }
 
   {
     uint32_t stop_pc = 0;

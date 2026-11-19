@@ -68,6 +68,7 @@ if command -v gcc >/dev/null 2>&1; then
     src/common/essential-memory.c \
     src/common/memory-fault.c \
     src/common/sha256.c \
+    src/common/aes.c \
     src/common/version.c \
     src/common/vtor.c \
     src/common/peripherals/component.c \
@@ -91,7 +92,8 @@ if command -v gcc >/dev/null 2>&1; then
     src/H1B3C/peripherals/timels.c \
     src/H1B3C/peripherals/watchdog.c \
     src/H1B3C/peripherals/rbox.c \
-    src/H1B3C/peripherals/crypto.c; do
+    src/H1B3C/peripherals/crypto.c \
+    src/H1B3C/peripherals/crypto-engine.c; do
     "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
   done
 fi

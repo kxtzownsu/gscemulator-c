@@ -255,7 +255,7 @@ def main() -> int:
                     f"({', '.join(names)}), which is a different register family")
 
     for path in sorted((root / "src/H1B3C/peripherals").glob("*.c")):
-        if path.name in ("fuses.c", "_init.c"):
+        if path.name in ("fuses.c", "_init.c", "crypto-engine.c"):
             continue
         if "component_log_unhandled" not in path.read_text():
             errors.append(

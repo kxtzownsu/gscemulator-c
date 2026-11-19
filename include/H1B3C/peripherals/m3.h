@@ -23,6 +23,9 @@
 #define REG_M3_CPUID_OFFSET 0xED00
 #define REG_M3_VTOR_OFFSET 0xED08
 #define REG_M3_CCR_OFFSET 0xED14
+#define REG_M3_SHPR1_OFFSET 0xED18
+#define REG_M3_SHPR2_OFFSET 0xED1C
+#define REG_M3_SHPR3_OFFSET 0xED20
 #define REG_M3_SHCSR_OFFSET 0xED24
 #define REG_M3_CFSR_OFFSET 0xED28
 #define REG_M3_HFSR_OFFSET 0xED2C
@@ -42,11 +45,22 @@ _Static_assert(REG_M3_NVIC_ISPR_OFFSET + REG_M3_NVIC_ISPR_COUNT * 4 <= REG_M3_NV
 _Static_assert(REG_M3_NVIC_ICPR_OFFSET + REG_M3_NVIC_ICPR_COUNT * 4 <= REG_M3_NVIC_IPR_OFFSET,
                "NVIC_ICPR overlaps NVIC_IPR");
 
+typedef enum {
+  M3_FAULT_USAGE = 0,
+  M3_FAULT_BUS = 1,
+  M3_FAULT_MEM = 2,
+  M3_FAULT_HARD = 3,
+} M3FaultKind;
+
 Component *M3_Initialize(void);
 void M3_StartCycleCount(void);
 uint32_t M3_GetVtor(void);
 void M3_PendIrq(unsigned irq);
 void M3_UnpendIrq(unsigned irq);
-int M3_TakePendingIrq(void);
+void M3_PendSysException(unsigned exc_num);
+int M3_TakeException(unsigned ipsr, int primask, int faultmask);
+int M3_ExceptionPriority(unsigned exc_num);
+unsigned M3_EscalateFault(unsigned kind, uint32_t status);
+void M3_Poll(void);
 
 #endif /* H1B3C_PERIPHERALS_M3_H */
