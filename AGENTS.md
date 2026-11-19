@@ -9,6 +9,8 @@ make                         # build build/$(uname -m)/gscemu
 make clean                   # remove gscemu and its objects
 make fullclean               # remove build/<ARCH>, including unicorn and fuzz
 make STATIC=1                # static link against the local unicorn
+make SINGLE_THREAD=1         # run emulation and handlers inline on the control thread
+make tsan                    # rebuild with ThreadSanitizer
 make fuzz                    # clang/libFuzzer + ASan/UBSan, 60s default
 make fuzz FUZZ_TIME=300      # longer run
 make fuzz FUZZ_TIME=0        # run until interrupted
@@ -58,6 +60,7 @@ With a bundled build, `-r` is optional and the binary falls back to `BUNDLED_H1B
 - `src/main.c` - CLI flow, chip selection, and emulator lifecycle.
 - `src/libargs.c`, `include/libargs.h` - argv parser and help printer.
 - `src/common/` - chip-agnostic emulator interface, ctx, return codes, file I/O, essential memory, peripheral framework, exit handling, logger.
+- `src/common/runtime/` - control thread, thread roles, component workers, console pty/stdio relay.
 - `src/H1B3C/` - Haven chip backend (H1B3C).
 - `src/H1B3C/peripherals/` - H1B3C MMIO components and their init table.
 - `scripts/generate_firmware_header.sh` - bundles one or more BootROM/firmware pairs into `include/common/bundled-firmware.h`.
@@ -78,6 +81,7 @@ CLI:
 - `--firmware` / `-f` copies the firmware path into `ctx.firmware.progfw` and clears `ctx.firmware.useBundledFW`. H1B3C loads it into the firmware region. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
 - With a chip that defines `BUNDLED_<CHIP>`, omitting `-r`/`-f` uses that chip's bundled arrays. Otherwise the file path is required; an empty path exits with `RC_CHIPEMU_FAILED_INIT`. With `BUNDLED_FIRMWARE=0`, nothing is bundled.
 - `--verbose` / `-v` enables verbose logging.
+- `--console none|pts` selects console output. Default `none`; `pts` opens a pty, prints its slave path, and relays stdio through it until UART drives the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
 - `--version` prints the build version and exits 0. The output includes the program name, `0.1.0-<commit>[-dirty]`, toolchain, unicorn version/commit, build date/unix timestamp, available chips, and bundled firmware.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -110,28 +114,43 @@ Essential memory:
 Memory faults:
 
 - `common/memory-fault.h` owns `install_memory_fault_hook`, which registers `UC_HOOK_MEM_{READ,WRITE,FETCH}_INVALID` on `ctx.uc`, and `memory_fault_occurred`, which reports whether a fault was seen.
-- The hook logs `Unmapped` or `Protected`, the access type, address, size, write value, and PC, sets its fault flag, and calls `uc_emu_stop`. The backend checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT`, so no unmapped or protected access can continue silently.
+- The hook logs `Unmapped` or `Protected`, the access type, address, size, write value, and PC, sets its atomic fault flag, and calls `uc_emu_stop`. The emulation thread checks `memory_fault_occurred()` after `uc_emu_start` and reports `RC_CHIPEMU_MEMORY_FAULT` through `runtime_fault`, so no unmapped or protected access can continue silently.
 - Install it after `uc_open` and before `uc_emu_start`. Never call `emu_exit` or `uc_close` from the hook; stop emulation and let the caller clean up.
 
 Peripherals:
 
-- `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`) and `MmioRegion` (`component`, `base`, `size`).
+- `common/peripherals/component.h` defines `Component` (`name`, `state`, `read`, `write`, `worker`) and `MmioRegion` (`component`, `base`, `size`).
 - `component_register` appends a component to `ctx.components`; `component_find` looks one up by name. `COMPONENT_MAX` bounds the registry.
-- `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`.
-- `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC. Use it in per-component default cases; never exit from a component callback.
+- `component_register_threaded` registers and starts a FIFO worker for that component; `component_stop_all` joins every worker and is control-thread-only. `component_register` leaves `worker` NULL and runs handlers inline. No current peripheral uses a worker; PMU and the rest are inline until a component has blocking or background work.
+- `component_map_mmio` maps each `MmioRegion` with `uc_mmio_map`. Component handlers receive an offset relative to the region base plus the access size, and must return `uint64_t`. A threaded component's handlers run on its worker; everything else runs inline on the emulation thread.
+- `component_log_unhandled` logs unknown MMIO offsets with the access type, offset, component name, and PC, then calls `runtime_fault(RC_CHIPEMU_MEMORY_FAULT, ...)`. On a worker it uses `tctx.mmio_pc`; it never reads unicorn from a worker and never calls `emu_exit`.
 - `include/H1B3C/peripherals/<name>.h` owns a peripheral's base address and register offsets; `H1B3C/peripherals.h` defines `DEFAULT_REG_LENGTH` (`0x10000`) as the MMIO region size. Registers are 4-byte aligned (`0x0`, `0x4`, `0x8`, ...).
 - Components are registered and mapped by `initialize_peripherals()` before `ctx.chipemu.ready` is set and before `uc_emu_start`.
-- Never call `emu_exit` or `uc_close` from an MMIO callback. Log and return 0, or set a fault flag and call `uc_emu_stop` so cleanup happens after `uc_emu_start` returns.
+- Never call `emu_exit` or `uc_close` from an MMIO callback. Use `runtime_fault`; it records the first error, sets `shutting_down`, calls `uc_emu_stop`, and lets the control thread clean up.
+- Worker handlers must not call any `uc_*` API. If they need the PC, use the snapshot in `WorkerOp.pc` / `tctx.mmio_pc`.
 - `DEFINE_BASIC_REGISTER` is file-scope singleton only. Components that need per-instance state use `Component.state`.
+
+Threads:
+
+- T0 control is the main thread. It owns CLI/init, `ctx.ac`, stdio, signal handling, and teardown. Only T0 may call `emu_exit`, `uc_close`, `argcheck_destroy`, or `exit`.
+- T1 emulation owns `ctx.uc` and runs `ctx.chipemu.start_emulation()`. Runtime errors call `runtime_fault()` and return; they never exit from T1.
+- T2 console runs only with `--console pts`. It owns the pty master and the console/UART relay and never touches unicorn. Default console is `none` until UART exists.
+- T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. No component opts in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
+- `common/runtime/control.h` owns `Runtime`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is callable from any thread; `runtime_run` tears down in the order stop T1/join, stop workers, stop console, `emu_exit`.
+- `common/runtime/thread.h` owns `ThreadCtx tctx` (role, name, worker/component, `mmio_pc`). It is thread-local labels and scratch only. Never store `ctx.uc`, `ctx.ac`, or the component array in it.
+- `common/runtime/worker.h` owns the worker queue and `worker_read` / `worker_write`.
+- `common/runtime/console.h` owns `console_start` / `console_stop` and the stdio pumps used by the control poll loop.
+- `make SINGLE_THREAD=1` bypasses T1 and all workers, runs emulation inline on T0, and rejects `--console pts`. It is the fuzz/CI path.
+- `make tsan` rebuilds with `-fsanitize=thread`; use it for any change to runtime, workers, logging, or component dispatch.
 
 Emulator:
 
 - `get_chipemu(chip)` fills `ctx.chipemu` with `initialize`, `start_emulation`, and `end_emulation`.
-- `initialize()` must set `ctx.chipemu.ready = true` only after successful setup. `main` exits when `ready` is false.
-- `start_emulation()` and `end_emulation()` take no arguments and use `ctx`. `end_emulation` must tolerate a partially initialized backend because `emu_exit` may call it on failure.
-- `start_emulation()` checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT` when the hook recorded an unmapped or protected access.
+- `initialize()` must set `ctx.chipemu.ready = true` only after successful setup. `main` exits when `ready` is false. It runs on T0, so init failures may still call `emu_exit`.
+- `start_emulation()` and `end_emulation()` take no arguments and use `ctx`. `start_emulation` runs on T1, reports failures with `runtime_fault`, and returns. `end_emulation` runs on T0 after T1 and the workers have stopped, and must tolerate a partially initialized backend.
+- `start_emulation()` checks `memory_fault_occurred()` after `uc_emu_start` and reports `RC_CHIPEMU_MEMORY_FAULT` when the hook recorded an unmapped or protected access.
 - `set_sp_pc(uc, vtor_base)` reads SP from `vtor_base + 0x0` and PC from `vtor_base + 0x4`, writes `UC_ARM_REG_SP`/`UC_ARM_REG_PC`, and exits with the VTOR `RC_*` codes on read failure. It does not set the Thumb bit; `start_emulation` does.
-- `emu_exit(Rc rc)` is `_Noreturn`: it calls `end_emulation` when one is set, destroys `ctx.ac`, and exits with `rc`. It clears `ctx.chipemu.end_emulation` and `ctx.ac` before running them, so a nested `emu_exit` cannot double-close or double-free. Never call `exit()` directly.
+- `emu_exit(Rc rc)` is `_Noreturn` and control-thread-only (debug assert). It stops workers and the console, calls `end_emulation` when one is set, destroys `ctx.ac`, and exits with `rc`. It clears `ctx.chipemu.end_emulation` and `ctx.ac` before running them, so a nested `emu_exit` cannot double-close or double-free. Never call `exit()` directly.
 
 Context:
 
@@ -145,13 +164,13 @@ Return codes:
 
 - `common/rc.h` defines `Rc`. Every `emu_exit` call, `exit` call, and `main` return uses an `RC_*` value; never pass a raw number.
 - `RC_SUCCESS` covers a normal run and the help path.
-- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, `RC_CHIPEMU_MEMORY_FAULT`, and `RC_LOGGER_INVALID_TYPE` cover failures.
+- `RC_ARGCHECK_FAILED`, `RC_ARG_CHIP_INVALID`, `RC_ARG_CONSOLE_INVALID`, `RC_ARG_PATH_TOO_LONG`, `RC_CHIPEMU_FAILED_INIT`, `RC_CHIPEMU_UNSUPPORTED`, `RC_CHIPEMU_FAILED_VTOR_SP_READ`, `RC_CHIPEMU_FAILED_VTOR_PC_READ`, `RC_CHIPEMU_EMULATION_ERROR`, `RC_CHIPEMU_MEMORY_FAULT`, `RC_RUNTIME_INTERRUPTED`, and `RC_LOGGER_INVALID_TYPE` cover failures.
 - Values are negative, so the process status is the low byte (`RC_ARG_CHIP_INVALID` reports as 254). Add a new `RC_*` value instead of reusing an unrelated one.
 
 Version:
 
 - `include/common/version.h` is generated by `scripts/generate_version_header.sh` and gitignored. Only `src/common/version.c` includes it; `common/common.h` exposes `print_version`.
-- A `build/<ARCH>/.build-config` stamp holds `STATIC`, `BUNDLED_FIRMWARE`, `BUNDLED_CHIPS`, `CC`, `CHIPS`, and `PROGRAM_VERSION`. The stamp is rewritten only when its content changes, so a rebuild that would only change the build date does not recompile or relink. Changing `STATIC` (or any other config value in the stamp) rebuilds every object.
+- A `build/<ARCH>/.build-config` stamp holds `STATIC`, `BUNDLED_FIRMWARE`, `BUNDLED_CHIPS`, `CC`, `CHIPS`, `PROGRAM_VERSION`, `SINGLE_THREAD`, and `TSAN`. The stamp is rewritten only when its content changes, so a rebuild that would only change the build date does not recompile or relink. Changing `STATIC`, `SINGLE_THREAD`, or `TSAN` rebuilds every object.
 - `--version` prints `GSCEMU_NAME`, `GSCEMU_VERSION` (`0.1.0-<commit>[-dirty]`), toolchain, unicorn version/commit, build date/unix timestamp, available chips, and bundled firmware.
 - `PROGRAM_VERSION` lives in `scripts/make/version.mk`; `CHIPS` lists available chips; the bundled summary comes from `BUNDLED_CHIPS`.
 
@@ -191,6 +210,9 @@ Version:
 - `BUNDLED_FIRMWARE ?= 1` adds `-DBUNDLED_FIRMWARE` and makes `include/common/bundled-firmware.h` a build dependency. `make BUNDLED_FIRMWARE=0` disables both.
 - `BUNDLED_CHIPS` selects the firmware pairs; each pair defaults to `src/<CHIP>/firmware/{bootrom,firmware}.bin`. The generated header defines `BUNDLED_<CHIP>` per chip; backends gate bundled use on that macro, not on `BUNDLED_FIRMWARE`.
 - `STATIC=1` replaces the pkg-config unicorn flags with `third_party/unicorn/include`, `$(UNICORN_STATIC_LIB)`, `-static`, and `-lpthread -lm`.
+- `CFLAGS` and `LDLIBS` include `-pthread`; the console also links `-lutil`.
+- `SINGLE_THREAD=1` adds `-DSINGLE_THREAD`, bypasses T1 and workers, and rejects `--console pts`.
+- `TSAN=1` adds `-fsanitize=thread` to `CFLAGS`/`LDFLAGS`; `make tsan` is the wrapper target. `SINGLE_THREAD`, `TSAN`, and `STATIC` are tracked in `build/<ARCH>/.build-config` so toggling rebuilds every object.
 - `LOCAL_UNICORN=1` only builds the local static library; it does not switch the headers or link. Use `STATIC=1` for a local static link.
 - `SRCS` filters out `src/H1B3C/firmware/`; those files build for the emulated target, not the host. Do not add them to the host objects.
 
@@ -200,17 +222,32 @@ Version:
 make clean && make BUNDLED_FIRMWARE=0
 ./build/$(uname -m)/gscemu --help
 ./build/$(uname -m)/gscemu --chip h1b3c -r <bootrom> -v
+make SINGLE_THREAD=1
+./build/$(uname -m)/gscemu
+make tsan
+./build/$(uname -m)/gscemu
 make fuzz FUZZ_TIME=1
 ```
 
 For a bundled build, provide `src/<CHIP>/firmware/{bootrom,firmware}.bin` or the matching `BUNDLED_<CHIP>_*` overrides and run plain `make`.
+
+Thread/console smoke checks:
+
+```bash
+./build/$(uname -m)/gscemu -r <loop-rom> -f <loop-rom> &   # expect control/emu tasks
+./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+```
+
+The current H1B3C boot must still stop at the unmapped write at `0x400600c4` with status 246.
 
 Run the fuzz target after touching `libargs`, CLI parsing, or the fuzz harness.
 
 Optional static checks:
 
 ```bash
-gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer -c src/libargs.c -o /tmp/libargs.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/libargs.c -o /tmp/libargs.o
+gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer -c src/common/runtime/control.c -o /tmp/control.o
 clang --analyze -Iinclude -std=c11 -Wall -Wextra src/main.c -o /dev/null
 ```
 

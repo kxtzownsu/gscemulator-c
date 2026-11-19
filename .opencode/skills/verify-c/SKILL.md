@@ -16,8 +16,9 @@ It checks:
 - `make clean && make BUNDLED_FIRMWARE=0`
 - `--help`, `--version`, a run without `--bootrom` exiting non-zero (source-only build), and `-r <bootrom> -v`
 - an invalid chip exits non-zero
+- an invalid `--console` mode exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
-- `gcc -fanalyzer` on `src/libargs.c`, `src/common/file.c`, `src/common/essential-memory.c`, `src/common/memory-fault.c`, `src/common/version.c`, `src/common/vtor.c`, `src/common/peripherals/component.c`, and the `src/H1B3C/peripherals/*.c` components, and `clang --analyze` on `src/main.c`
+- `gcc -fanalyzer` on `src/libargs.c`, `src/common/{file,essential-memory,memory-fault,version,vtor}.c`, `src/common/peripherals/component.c`, the `src/common/runtime/*.c` files, and the `src/H1B3C/peripherals/*.c` components, and `clang --analyze` on `src/main.c`
 
 ## Manual equivalent
 
@@ -27,10 +28,24 @@ BIN="build/$(uname -m)/gscemu"
 "$BIN" --help
 "$BIN" --version
 "$BIN" || true                    # exits 252 without --bootrom
+"$BIN" --console bogus || true    # exits 244
 "$BIN" -r <bootrom> -v
 "$BIN" --chip invalid || true
 make fuzz FUZZ_TIME=1
 ```
+
+## Thread and console checks
+
+```bash
+make SINGLE_THREAD=1
+./build/$(uname -m)/gscemu       # status 246, [control] logs
+make tsan
+./build/$(uname -m)/gscemu       # no ThreadSanitizer report
+./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
+```
+
+A default build should show control/emu tasks; `--console pts` adds the console task. `--console none` is the default and creates no console thread. No peripheral uses a worker today, so there are no `[PMU]` tasks.
 
 ## Bundled builds
 

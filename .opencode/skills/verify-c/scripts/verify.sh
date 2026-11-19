@@ -20,6 +20,11 @@ if "$BIN" >/dev/null 2>&1; then
   exit 1
 fi
 
+if "$BIN" --console bogus >/dev/null 2>&1; then
+  echo "verify-c: invalid console mode unexpectedly succeeded" >&2
+  exit 1
+fi
+
 if [ -n "${VERIFY_BOOTROM:-}" ]; then
   "$BIN" -r "$VERIFY_BOOTROM" -v >/dev/null
 else
@@ -41,28 +46,25 @@ else
 fi
 
 if command -v gcc >/dev/null 2>&1; then
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/libargs.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/file.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/essential-memory.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/memory-fault.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/version.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/vtor.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/common/peripherals/component.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/H1B3C/peripherals/m3.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/H1B3C/peripherals/fuses.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/H1B3C/peripherals/globalsec.c -o "$TMP_O"
-  gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -fanalyzer \
-    -c src/H1B3C/peripherals/pmu.c -o "$TMP_O"
+  ANALYZE=(gcc -Iinclude -std=c11 -Wall -Wextra -Wformat=2 -pthread -fanalyzer)
+  for src in \
+    src/libargs.c \
+    src/common/file.c \
+    src/common/essential-memory.c \
+    src/common/memory-fault.c \
+    src/common/version.c \
+    src/common/vtor.c \
+    src/common/peripherals/component.c \
+    src/common/runtime/control.c \
+    src/common/runtime/console.c \
+    src/common/runtime/thread.c \
+    src/common/runtime/worker.c \
+    src/H1B3C/peripherals/m3.c \
+    src/H1B3C/peripherals/fuses.c \
+    src/H1B3C/peripherals/globalsec.c \
+    src/H1B3C/peripherals/pmu.c; do
+    "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
+  done
 fi
 
 if command -v clang >/dev/null 2>&1; then

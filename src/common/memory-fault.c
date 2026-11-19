@@ -1,5 +1,6 @@
 #include <common/memory-fault.h>
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -10,7 +11,7 @@
 #include <common/logger.h>
 #include <common/rc.h>
 
-static bool fault_occurred;
+static _Atomic bool fault_occurred;
 
 static void memory_fault_hook(uc_engine *uc, uc_mem_type type, uint64_t address, int size,
                               int64_t value, void *user_data) {
@@ -51,12 +52,12 @@ static void memory_fault_hook(uc_engine *uc, uc_mem_type type, uint64_t address,
             fault, access, (unsigned long long)address, size, pc);
   }
 
-  fault_occurred = true;
+  atomic_store(&fault_occurred, true);
   (void)uc_emu_stop(uc);
 }
 
 bool memory_fault_occurred(void) {
-  return fault_occurred;
+  return atomic_load(&fault_occurred);
 }
 
 void install_memory_fault_hook(void) {
@@ -68,7 +69,7 @@ void install_memory_fault_hook(void) {
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
 
-  fault_occurred = false;
+  atomic_store(&fault_occurred, false);
 
   err = uc_hook_add(ctx.uc, &hook,
                     UC_HOOK_MEM_READ_INVALID | UC_HOOK_MEM_WRITE_INVALID | UC_HOOK_MEM_FETCH_INVALID,

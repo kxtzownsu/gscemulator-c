@@ -18,6 +18,6 @@ include scripts/make/clean.mk
 
 .DELETE_ON_ERROR:
 
-.PHONY: all clean fullclean run fuzz
+.PHONY: all clean fullclean run fuzz tsan
 
 -include $(DEPS)

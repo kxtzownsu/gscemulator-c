@@ -8,6 +8,7 @@
 #include <inttypes.h>
 
 #include <common/common.h>
+#include <common/runtime/control.h>
 
 #ifdef BUNDLED_FIRMWARE
 #include <common/bundled-firmware.h>
@@ -81,12 +82,14 @@ void Havn_StartEmulation(void) {
 
   if (!ctx.chipemu.ready){
     LOG_ERR("Emulator not initialized!");
-    emu_exit(RC_CHIPEMU_FAILED_INIT);
+    runtime_fault(RC_CHIPEMU_FAILED_INIT, "emulator not initialized");
+    return;
   }
 
   if (ctx.uc == NULL){
     LOG_ERR("ctx.uc not set!");
-    emu_exit(RC_CHIPEMU_FAILED_INIT);
+    runtime_fault(RC_CHIPEMU_FAILED_INIT, "unicorn engine not set");
+    return;
   }
 
   /* Default is 0xFFFFFFFF so we can easily halt execution if it isn't mapped correctly. */
@@ -96,13 +99,15 @@ void Havn_StartEmulation(void) {
   err = uc_reg_read(ctx.uc, UC_ARM_REG_SP, &sp);
   if (err != UC_ERR_OK){
     LOG_ERR("Failed to read SP: %s\n", uc_strerror(err));
-    emu_exit(RC_CHIPEMU_FAILED_VTOR_SP_READ);
+    runtime_fault(RC_CHIPEMU_FAILED_VTOR_SP_READ, "failed to read SP");
+    return;
   }
 
   err = uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc);
   if (err != UC_ERR_OK){
     LOG_ERR("Failed to read PC: %s\n", uc_strerror(err));
-    emu_exit(RC_CHIPEMU_FAILED_VTOR_PC_READ);
+    runtime_fault(RC_CHIPEMU_FAILED_VTOR_PC_READ, "failed to read PC");
+    return;
   }
 
   /* Set thumb bit */
@@ -114,12 +119,14 @@ void Havn_StartEmulation(void) {
 
   if (memory_fault_occurred()) {
     LOG_ERR("Emulation stopped due to a memory fault\n");
-    emu_exit(RC_CHIPEMU_MEMORY_FAULT);
+    runtime_fault(RC_CHIPEMU_MEMORY_FAULT, "emulation stopped due to a memory fault");
+    return;
   }
 
   if (err != UC_ERR_OK) {
     LOG_ERR("Emulation stopped with error: %s\n", uc_strerror(err));
-    emu_exit(RC_CHIPEMU_EMULATION_ERROR);
+    runtime_fault(RC_CHIPEMU_EMULATION_ERROR, "%s", uc_strerror(err));
+    return;
   }
 
   LOG_VBS("Emulation finished.\n");

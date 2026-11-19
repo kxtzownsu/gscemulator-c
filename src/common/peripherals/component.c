@@ -4,9 +4,19 @@
 #include <string.h>
 
 #include <common/common.h>
+#include <common/runtime/control.h>
+#include <common/runtime/thread.h>
+#include <common/runtime/worker.h>
 
 static uint64_t component_mmio_read(uc_engine *uc, uint64_t offset, unsigned size, void *user_data) {
   Component *component = user_data;
+
+  if (component->worker != NULL) {
+    uint32_t pc = 0xFFFFFFFF;
+
+    (void)uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+    return worker_read(component->worker, component, offset, size, pc);
+  }
 
   (void)uc;
   return component->read(component, offset, size);
@@ -14,6 +24,14 @@ static uint64_t component_mmio_read(uc_engine *uc, uint64_t offset, unsigned siz
 
 static void component_mmio_write(uc_engine *uc, uint64_t offset, unsigned size, uint64_t value, void *user_data) {
   Component *component = user_data;
+
+  if (component->worker != NULL) {
+    uint32_t pc = 0xFFFFFFFF;
+
+    (void)uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+    worker_write(component->worker, component, offset, size, value, pc, false);
+    return;
+  }
 
   (void)uc;
   component->write(component, offset, size, value);
@@ -54,8 +72,40 @@ Component *component_register(const char *name, void *state, ComponentRead read,
   component->state = state;
   component->read = read;
   component->write = write;
+  component->worker = NULL;
 
   return component;
+}
+
+Component *component_register_threaded(const char *name, void *state, ComponentRead read, ComponentWrite write) {
+#ifdef SINGLE_THREAD
+  return component_register(name, state, read, write);
+#else
+  Component *component = component_register(name, state, read, write);
+
+  if (component == NULL) return NULL;
+
+  component->worker = worker_start(component->name);
+  if (component->worker == NULL) {
+    LOG_ERR("Failed to start worker for %s\n", component->name);
+    return NULL;
+  }
+
+  return component;
+#endif
+}
+
+void component_stop_all(void) {
+  size_t i;
+
+  for (i = 0; i < ctx.component_count; i++) {
+    Component *component = &ctx.components[i];
+
+    if (component->worker != NULL) {
+      worker_stop(component->worker);
+      component->worker = NULL;
+    }
+  }
 }
 
 bool component_map_mmio(uc_engine *uc, const MmioRegion *regions, size_t count) {
@@ -94,12 +144,14 @@ void component_log_unhandled(const Component *component, const char *access, uin
 
   if (component == NULL) return;
 
-  if (ctx.uc != NULL && uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) {
+  if (tctx.mmio_pc_valid) {
+    pc = tctx.mmio_pc;
+  } else if (ctx.uc != NULL && uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) {
     pc = 0xFFFFFFFF;
   }
 
   LOG_ERR("Unhandled %s register 0x%llx in component %s at pc=0x%08x\n",
           access, (unsigned long long)offset, component->name, pc);
-  
-  emu_exit(RC_CHIPEMU_MEMORY_FAULT);
+
+  runtime_fault(RC_CHIPEMU_MEMORY_FAULT, "unhandled register in %s", component->name);
 }

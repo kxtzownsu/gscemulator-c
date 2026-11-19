@@ -10,18 +10,18 @@ H1B3C is the Haven chip backend. Its entry points use the `Havn_` prefix.
 - `Havn_Initialize` assigns the table to `ctx.essential_memory`, calls `map_essential_memory()`, then calls `load_firmware()` with the `BUNDLED_H1B3C_*` arrays under `BUNDLED_H1B3C` or NULLs when H1B3C is not bundled. INFO1 remains a chip-local write.
 - `Havn_Initialize` calls `set_sp_pc(ctx.uc, FLASH_ROM_BASE)` after the flash writes. `set_sp_pc` sets SP/PC; `Havn_StartEmulation` sets the Thumb bit.
 - `init_unicorn` installs the memory fault hook after `uc_open` and the Cortex-M3 model setup, so unmapped/protected accesses log the address, access type, and PC.
-- `Havn_StartEmulation` checks `memory_fault_occurred()` after `uc_emu_start` and exits with `RC_CHIPEMU_MEMORY_FAULT` before inspecting the engine error.
+- `Havn_StartEmulation` runs on T1, checks `memory_fault_occurred()` after `uc_emu_start`, and reports failures with `runtime_fault` before inspecting the engine error. It returns instead of exiting.
 - `ctx.firmware.progfw` / `--firmware` is loaded into the firmware region by `load_firmware`.
-- Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set.
+- Peripherals live in `src/H1B3C/peripherals/`. Each `X_Initialize()` registers a `Component` and `initialize_peripherals()` maps the `MmioRegion` table before `ready` is set. `component_register_threaded` starts an opt-in worker; `component_register` keeps the handler inline on T1.
 - Register bases and offsets belong in the matching `include/H1B3C/peripherals/<name>.h`; `DEFAULT_REG_LENGTH` in `H1B3C/peripherals.h` is the MMIO region size for every peripheral. Keep offsets 4-byte aligned.
 - `M3` is mapped at `REG_M3_BASE_ADDR` (`0xE0000000`, size `DEFAULT_REG_LENGTH`) and handles `DWT_CTRL`, `CPUID`, `ITCMCR`, and `DEMCR`. `CPUID` reads `0x410FC331` and is read-only; `ITCMCR` reads back `7` after any write, matching the Cr50 ROM.
 - `FUSE` is mapped at `REG_FUSE_BASE_ADDR` (`0x40450000`, size `DEFAULT_REG_LENGTH`). Reads return the matching `fuse_defaults` value or `REG_FUSE_BLANK_VALUE` (`0x55555555`); writes are ignored and only logged at verbose level, matching the read-only eFuse.
 - `GLOBALSEC` is mapped at `REG_GLOBALSEC_BASE_ADDR` (`0x40090000`, size `DEFAULT_REG_LENGTH`). `ALERT_CONTROL` and `DBG_CONTROL` (`0x405C`, `0xA6D0`) are plain registers; `DUMMYKEY0..2` (`0x9598`, `0xAF04`, `0xB2AC`) back a three-entry array indexed by offset.
-- `PMU` is mapped at `REG_PMU_BASE_ADDR` (`0x40000000`, size `DEFAULT_REG_LENGTH`). `PERICLKSET0/1` set bits and `PERICLKCLR0/1` clear bits in a 48-entry clock-enable array; reads on any of the four return the current enabled mask.
-- MMIO handlers must not call `emu_exit` or `uc_close`; log and return 0, or stop emulation and let `Havn_StartEmulation` clean up.
+- `PMU` is mapped at `REG_PMU_BASE_ADDR` (`0x40000000`, size `DEFAULT_REG_LENGTH`). `PERICLKSET0/1` set bits and `PERICLKCLR0/1` clear bits in a 48-entry clock-enable array; reads on any of the four return the current enabled mask. It registers with `component_register` and runs inline on T1; the handlers are pure state and never block.
+- MMIO handlers must not call `emu_exit` or `uc_close`; use `runtime_fault` from any thread and let the control thread clean up. `Havn_StartEmulation` must not exit on runtime errors.
 - `DEFINE_BASIC_REGISTER` is for file-scope singletons only. Use `Component.state` for components that need instance state.
-- `Havn_StartEmulation` and `Havn_EndEmulation` must not call `exit`. Return normally, or use `emu_exit` for fatal errors.
-- `Havn_EndEmulation` must tolerate a partially initialized backend because failure paths call it through `emu_exit`.
+- `Havn_StartEmulation` and `Havn_EndEmulation` must not call `exit`. Return normally, or use `runtime_fault` for runtime errors.
+- `Havn_EndEmulation` runs on T0 after the emulation thread and workers have stopped, and must tolerate a partially initialized backend because failure paths call it through `emu_exit`.
 - Keep Haven state, register definitions, and chip-specific parsing in this module. Do not add them to `common/Emulator`.
 - Use `LOG`, `LOG_VBS`, and `LOG_ERR`; do not call `printf` directly.
 - New chips follow the same shape:

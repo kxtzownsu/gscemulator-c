@@ -26,3 +26,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 run: $(TARGET)
 	@echo "  RUN       $(TARGET)"
 	$(Q)$(TARGET)
+
+tsan:
+	@echo "  TSAN      $(TARGET)"
+	$(Q)$(MAKE) TSAN=1
