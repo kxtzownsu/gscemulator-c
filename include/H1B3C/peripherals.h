@@ -22,6 +22,7 @@
 #include <H1B3C/peripherals/rdd.h>
 #include <H1B3C/peripherals/spi.h>
 #include <H1B3C/peripherals/sps.h>
+#include <H1B3C/peripherals/i2c.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 

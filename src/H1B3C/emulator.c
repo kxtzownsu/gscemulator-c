@@ -1,4 +1,5 @@
 #include <H1B3C/emulator.h>
+#include <H1B3C/endorsement-cert.h>
 #include <H1B3C/memory.h>
 #include <H1B3C/peripherals.h>
 #include <H1B3C/proxies.h>
@@ -18,6 +19,15 @@
 #define EXC_RETURN_HANDLER 0xFFFFFFF1u
 #define EXC_RETURN_MSP 0xFFFFFFF9u
 #define EXC_RETURN_PSP 0xFFFFFFFDu
+
+#define BOARD_GPIO_BATT_PRES_L 6
+#define BOARD_GPIO_I2C_SCL 12
+#define BOARD_GPIO_I2C_SDA 13
+
+_Static_assert(ENDORSEMENT_SEED_OFFSET + ENDORSEMENT_SEED_SIZE <= FLASH_INFO1_SIZE,
+               "endorsement seed must fit in INFO1");
+_Static_assert(ENDORSEMENT_CERT_OFFSET + ENDORSEMENT_CERT_SIZE <= FLASH_PROG_SIZE,
+               "endorsement certificates must fit in PROG");
 
 static void exc_push(uc_engine *uc, uint32_t *sp, uint32_t value) {
   *sp -= 4;
@@ -300,6 +310,8 @@ void Havn_Initialize(void) {
 
   /* blank flash is 0xFF */
   memset(INFO1BUF, 0xFF, sizeof(INFO1BUF));
+  memcpy(INFO1BUF + ENDORSEMENT_SEED_OFFSET, PROD_ENDORSEMENT_SEED,
+         ENDORSEMENT_SEED_SIZE);
 
   init_unicorn();
 
@@ -319,6 +331,15 @@ void Havn_Initialize(void) {
   load_firmware(NULL, 0, NULL, 0);
 #endif
 
+  err = uc_mem_write(ctx.uc, FLASH_PROG_BASE + ENDORSEMENT_CERT_OFFSET,
+                     PROD_RO_CERT_REGION, ENDORSEMENT_CERT_SIZE);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("unable to write endorsement certificates: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
+
+  LOG_VBS("Wrote endorsement certificates to the RO region\n");
+
   /* Write INFO1BUF to FLASH_INFO1 */
   err = uc_mem_write(ctx.uc, FLASH_INFO1_BASE, INFO1BUF, sizeof(INFO1BUF));
   if (err != UC_ERR_OK){
@@ -331,6 +352,9 @@ void Havn_Initialize(void) {
   set_sp_pc(ctx.uc, FLASH_ROM_BASE);
 
   initialize_peripherals();
+  GPIO_SetInputOverride(0, BOARD_GPIO_BATT_PRES_L, true);
+  GPIO_SetInputOverride(0, BOARD_GPIO_I2C_SCL, true);
+  GPIO_SetInputOverride(0, BOARD_GPIO_I2C_SDA, true);
 
   ctx.chipemu.ready = true;
 }

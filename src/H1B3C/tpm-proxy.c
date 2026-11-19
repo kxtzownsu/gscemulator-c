@@ -543,6 +543,8 @@ static bool tis_transact(const uint8_t *command, size_t cmd_len, uint8_t *resp, 
     return tpm_make_response(TPM_RC_SUCCESS, resp, resp_cap, resp_len);
   }
 
+  if (cc != TPM2_CC_STARTUP) (void)tis_startup();
+
   return tis_send_command(command, cmd_len, resp, resp_cap, resp_len);
 }
 

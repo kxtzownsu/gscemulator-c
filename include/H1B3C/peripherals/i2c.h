@@ -1,0 +1,45 @@
+#ifndef H1B3C_PERIPHERALS_I2C_H
+#define H1B3C_PERIPHERALS_I2C_H
+
+#include <common/peripherals/component.h>
+
+#define REG_I2C0_BASE_ADDR 0x40630000
+#define REG_I2C1_BASE_ADDR 0x40640000
+#define REG_I2CS_BASE_ADDR 0x40530000
+
+#define REG_I2C_CTRL_MODE_OFFSET 0x0
+#define REG_I2C_CTRL_CLKDIV_OFFSET 0x4
+#define REG_I2C_CTRL_PHASESTEPS_OFFSET 0x8
+#define REG_I2C_CTRL_SDA_VAL_OFFSET 0xC
+#define REG_I2C_CTRL_SDA_OVRD_OFFSET 0x10
+#define REG_I2C_CTRL_SCL_VAL_OFFSET 0x14
+#define REG_I2C_CTRL_SCL_OVRD_OFFSET 0x18
+#define REG_I2C_CTRL_INT_EN_OFFSET 0x1C
+#define REG_I2C_CTRL_AL_OFFSET 0x20
+#define REG_I2C_CTRL_CS_OFFSET 0x24
+#define REG_I2C_INST_OFFSET 0x28
+#define REG_I2C_STATUS_OFFSET 0x2C
+#define REG_I2C_FW_OFFSET 0x30
+#define REG_I2C_RW_PTR_OFFSET 0x34
+#define REG_I2C_RW0_OFFSET 0x38
+#define REG_I2C_RW_COUNT 16
+#define REG_I2C_READVAL_OFFSET 0x78
+#define REG_I2C_CTRL_MSR_OFFSET 0x7C
+#define REG_I2C_ITCR_OFFSET 0xF00
+#define REG_I2C_ITOP_OFFSET 0xF04
+#define REG_I2C_REGION_COUNT 32
+
+#define REG_I2CS_REGION_OFFSET 0x0
+#define REG_I2CS_REGION_COUNT 45
+
+_Static_assert(REG_I2C_RW0_OFFSET + REG_I2C_RW_COUNT * 4 <= REG_I2C_READVAL_OFFSET,
+               "I2C RW array must end before READVAL");
+_Static_assert(REG_I2C_REGION_COUNT * 4 == REG_I2C_CTRL_MSR_OFFSET + 4,
+               "I2C register file must end at CTRL_MSR");
+_Static_assert(REG_I2CS_REGION_COUNT * 4 == 0xB4,
+               "I2CS register file must end at 0xB4");
+
+Component *I2C_Initialize(unsigned port);
+Component *I2CS_Initialize(void);
+
+#endif /* H1B3C_PERIPHERALS_I2C_H */

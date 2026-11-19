@@ -25,10 +25,44 @@ typedef struct {
 
 static UartState uarts[3];
 
+#define UART_RMA_LINE_SIZE 256
+
+typedef struct {
+  char line[UART_RMA_LINE_SIZE];
+  size_t length;
+  bool waiting;
+} UartRmaScanner;
+
+static UartRmaScanner rma_scanner;
+
+static void uart_scan_rma_byte(uint8_t byte) {
+  if (byte == '\r') return;
+
+  if (byte != '\n') {
+    if (rma_scanner.length < sizeof(rma_scanner.line) - 1) {
+      rma_scanner.line[rma_scanner.length++] = (char)byte;
+    }
+    return;
+  }
+
+  rma_scanner.line[rma_scanner.length] = '\0';
+
+  if (!rma_scanner.waiting) {
+    if (strcmp(rma_scanner.line, "generated challenge:") == 0) rma_scanner.waiting = true;
+  } else if (rma_scanner.length != 0) {
+    LOG("\nRMA challenge: %s\n", rma_scanner.line);
+    rma_scanner.waiting = false;
+  }
+
+  rma_scanner.length = 0;
+}
+
 static void uart_tx_byte(UartState *uart, uint8_t byte) {
   ssize_t written;
 
   if (!uart->console) return;
+
+  uart_scan_rma_byte(byte);
 
   if (console_active() && console_uart_write(&byte, 1) == 1) {
     M3_PendIrq(uart->tx_irq);

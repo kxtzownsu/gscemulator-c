@@ -659,7 +659,10 @@ static void usb_proxy_context_request(int fd, const uint8_t *setup, size_t setup
   pthread_mutex_unlock(&proxy.control_lock);
 
   if (!ready) {
-    LOG_ERR("USB proxy: control transfer timed out\n");
+    LOG_ERR("USB proxy: control transfer timed out "
+            "(type=0x%02x request=0x%02x value=0x%04x index=0x%04x length=%u)\n",
+            request.bRequestType, request.bRequest, le16toh(request.wValue),
+            le16toh(request.wIndex), le16toh(request.wLength));
     usb_proxy_ep0_stall(fd);
     USB_HostEp0Done();
     free(data);
