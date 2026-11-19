@@ -5,6 +5,7 @@
 
 #include <common/logger.h>
 #include <common/peripherals/define.h>
+#include <common/runtime/console.h>
 
 DEFINE_BASIC_REGISTER(nco)
 
@@ -15,9 +16,27 @@ static const BasicRegister uart_registers[] = {
 static uint32_t uart_ctrl;
 static uint32_t uart_state = 1;
 static uint32_t uart_rdata;
+static uint8_t uart_rx_byte;
+static bool uart_rx_buffered;
+
+static bool uart_rx_poll(void) {
+  uint8_t byte;
+
+  if (uart_rx_buffered) return true;
+  if ((uart_state & 2u) != 0) return false;
+  if (console_uart_read(&byte, 1) != 1) return false;
+
+  uart_rx_byte = byte;
+  uart_rx_buffered = true;
+  return true;
+}
 
 static void uart_tx_byte(uint8_t byte) {
-  ssize_t written = write(STDOUT_FILENO, &byte, 1);
+  ssize_t written;
+
+  if (console_active() && console_uart_write(&byte, 1) == 1) return;
+
+  written = write(STDOUT_FILENO, &byte, 1);
   (void)written;
 }
 
@@ -44,17 +63,38 @@ static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
   }
 
   switch (offset) {
-    case REG_UART_RDATA_OFFSET:
+    case REG_UART_RDATA_OFFSET: {
       if ((uart_state & 2u) != 0) {
         LOG_ERR("UART: RDATA read while RX is disabled\n");
         return 0;
       }
+
+      if (!uart_rx_poll()) {
+        uart_state |= 0x80u;
+        return 0;
+      }
+
+      uart_rdata = uart_rx_byte;
+      uart_rx_buffered = false;
+
+      if (uart_rx_poll()) {
+        uart_state &= ~0x80u;
+      } else {
+        uart_state |= 0x80u;
+      }
+
       LOG_VBS("UART: read RDATA (size=%u) -> 0x%08x\n", size, uart_rdata);
       return uart_rdata;
+    }
     case REG_UART_CTRL_OFFSET:
       LOG_VBS("UART: read CTRL (size=%u) -> 0x%08x\n", size, uart_ctrl);
       return uart_ctrl;
     case REG_UART_STATE_OFFSET:
+      if (uart_rx_poll()) {
+        uart_state &= ~0x80u;
+      } else {
+        uart_state |= 0x80u;
+      }
       LOG_VBS("UART: read STATE (size=%u) -> 0x%08x\n", size, uart_state);
       return uart_state;
     default:
@@ -101,6 +141,8 @@ Component *UART_Initialize(void) {
   uart_ctrl = 0;
   uart_state = 1;
   uart_rdata = 0;
+  uart_rx_byte = 0;
+  uart_rx_buffered = false;
 
   return component_register_threaded("UART", NULL, UART_Read, UART_Write);
 }

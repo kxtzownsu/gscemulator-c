@@ -11,9 +11,9 @@
 - `./build/$(uname -m)/gscemu --console bogus` exits with `RC_ARG_CONSOLE_INVALID` (244).
 - If the header defines `BUNDLED_H1B3C`, omitting `-r` uses `BUNDLED_H1B3C_BOOTROM_BIN`; otherwise it exits 252. The exit status depends on the bundled image.
 - `./build/$(uname -m)/gscemu -r <bootrom> -v` runs the H1B3C lifecycle and prints verbose logs prefixed with the thread role (`[emu]`, `[UART]`, `[TRNG]`, `[KEYMGR]`, `[control]`, ...). PMU is inline and logs as `[emu]`; UART, TRNG, and KEYMGR are the workers today.
-- A default build has 5 tasks (control, emu, UART, TRNG, KEYMGR); `--console pts` adds the console task; `make SINGLE_THREAD=1` has 1.
-- The current H1B3C boot prints the banner, `exp ?36`, `Himg`/`Hfss`/`Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, `jump @00040400`, `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, and the loader `Himg`/`Hfss`/`Hinf` lines with `: 1`, then stops on the unhandled KEYMGR `HKEY_FWR0` write at `0x40573100` with status 246.
-- `./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>` prints the pty slave path and relays stdin/stdout through it.
+- An interactive default build has 6 tasks (control, emu, console, UART, TRNG, KEYMGR); a non-TTY default and `--console none` have 5; `make SINGLE_THREAD=1` has 1.
+- The current H1B3C boot prints the banner, `exp ?36`, `Himg`/`Hfss`/`Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, `jump @00040400`, `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, the loader `Himg`/`Hfss`/`Hinf` lines with `: 1`, `devm :0`, and `jump @44000`, then stops on the unmapped USB0 read at `0x40300e00` with status 246.
+- `./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>` creates a pty, prints the slave path, and routes stdin/stdout and UART through it.
 - `make SINGLE_THREAD=1` runs emulation inline on the control thread and rejects `--console pts` with 244.
 - `make tsan` builds and the boot smoke test produces no ThreadSanitizer report.
 - `./build/$(uname -m)/gscemu -f <firmware> -r <bootrom>` accepts `--firmware` and loads it into the firmware region.

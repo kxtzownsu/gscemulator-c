@@ -18,8 +18,13 @@
 
 DEFINE_BASIC_REGISTER(rwr_vld)
 DEFINE_BASIC_REGISTER(rwr_lock)
+DEFINE_BASIC_REGISTER(fwr_vld)
+DEFINE_BASIC_REGISTER(fw_major_version)
+DEFINE_BASIC_REGISTER(fwr_lock)
 DEFINE_BASIC_REGISTER(hkey_err_flags)
-DEFINE_BASIC_REGISTER(cert_revoke_ctrl)
+DEFINE_BASIC_REGISTER(cert_revoke_ctrl0)
+DEFINE_BASIC_REGISTER(cert_revoke_ctrl1)
+DEFINE_BASIC_REGISTER(cert_revoke_ctrl2)
 DEFINE_BASIC_REGISTER(sha_sts)
 DEFINE_BASIC_REGISTER(sha_itcr)
 DEFINE_BASIC_REGISTER(sha_use_hidden_key)
@@ -29,16 +34,23 @@ DEFINE_BASIC_REGISTER(sha_execute_count_max)
 static const BasicRegister keymgr_registers[] = {
   BASIC_REGISTER_ENTRY(REG_KEYMGR_RWR_VLD_OFFSET, rwr_vld),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_RWR_LOCK_OFFSET, rwr_lock),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_FWR_VLD_OFFSET, fwr_vld),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_FW_MAJOR_VERSION_OFFSET, fw_major_version),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_FWR_LOCK_OFFSET, fwr_lock),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_HKEY_ERR_FLAGS_OFFSET, hkey_err_flags),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_SHA_STS_OFFSET, sha_sts),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_SHA_ITCR_OFFSET, sha_itcr),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_SHA_USE_HIDDEN_KEY_OFFSET, sha_use_hidden_key),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_SHA_EXECUTE_COUNT_STATE_OFFSET, sha_execute_count_state),
   BASIC_REGISTER_ENTRY(REG_KEYMGR_SHA_EXECUTE_COUNT_MAX_OFFSET, sha_execute_count_max),
-  BASIC_REGISTER_ENTRY(REG_KEYMGR_CERT_REVOKES_CTRL_OFFSET, cert_revoke_ctrl),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_CERT_REVOKE_CTRL0_OFFSET, cert_revoke_ctrl0),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_CERT_REVOKE_CTRL1_OFFSET, cert_revoke_ctrl1),
+  BASIC_REGISTER_ENTRY(REG_KEYMGR_CERT_REVOKE_CTRL2_OFFSET, cert_revoke_ctrl2),
 };
 
 static uint32_t hkey_rwr[REG_KEYMGR_HKEY_RWR_COUNT];
+static uint32_t hkey_fwr[REG_KEYMGR_HKEY_FWR_COUNT];
+static uint32_t hkey_frr[REG_KEYMGR_HKEY_FRR_COUNT];
 static uint32_t sha_msglen_lo;
 static uint32_t sha_msglen_hi;
 static uint64_t sha_msglen;
@@ -54,14 +66,13 @@ static uint32_t sha_rand_stall_ctl;
 static Sha256Context sha_context;
 static uint64_t sha_input_len;
 
-static int rwr_index(uint64_t offset) {
-  uint64_t end =
-      REG_KEYMGR_HKEY_RWR0_OFFSET + (uint64_t)REG_KEYMGR_HKEY_RWR_COUNT * sizeof(uint32_t);
+static int hkey_index(uint64_t offset, uint32_t base, unsigned count) {
+  uint64_t end = (uint64_t)base + (uint64_t)count * sizeof(uint32_t);
 
   if ((offset & 3u) != 0) return -1;
-  if (offset < REG_KEYMGR_HKEY_RWR0_OFFSET || offset >= end) return -1;
+  if (offset < base || offset >= end) return -1;
 
-  return (int)((offset - REG_KEYMGR_HKEY_RWR0_OFFSET) / sizeof(uint32_t));
+  return (int)((offset - base) / sizeof(uint32_t));
 }
 
 static int sts_h_index(uint64_t offset) {
@@ -138,10 +149,22 @@ static uint64_t KEYMGR_Read(Component *self, uint64_t offset, unsigned size) {
     return *reg->value;
   }
 
-  index = rwr_index(offset);
+  index = hkey_index(offset, REG_KEYMGR_HKEY_RWR0_OFFSET, REG_KEYMGR_HKEY_RWR_COUNT);
   if (index >= 0) {
     LOG_VBS("KEYMGR: read HKEY_RWR%d (size=%u) -> 0x%08x\n", index, size, hkey_rwr[index]);
     return hkey_rwr[index];
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_FWR0_OFFSET, REG_KEYMGR_HKEY_FWR_COUNT);
+  if (index >= 0) {
+    LOG_VBS("KEYMGR: read HKEY_FWR%d (size=%u) -> 0x%08x\n", index, size, hkey_fwr[index]);
+    return hkey_fwr[index];
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_FRR0_OFFSET, REG_KEYMGR_HKEY_FRR_COUNT);
+  if (index >= 0) {
+    LOG_VBS("KEYMGR: read HKEY_FRR%d (size=%u) -> 0x%08x\n", index, size, hkey_frr[index]);
+    return hkey_frr[index];
   }
 
   index = sts_h_index(offset);
@@ -196,10 +219,23 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
     return;
   }
 
-  index = rwr_index(offset);
+  index = hkey_index(offset, REG_KEYMGR_HKEY_RWR0_OFFSET, REG_KEYMGR_HKEY_RWR_COUNT);
   if (index >= 0) {
     hkey_rwr[index] = (uint32_t)value;
     LOG_VBS("KEYMGR: wrote HKEY_RWR%d (size=%u) <- 0x%08x\n", index, size, hkey_rwr[index]);
+    return;
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_FWR0_OFFSET, REG_KEYMGR_HKEY_FWR_COUNT);
+  if (index >= 0) {
+    hkey_fwr[index] = (uint32_t)value;
+    LOG_VBS("KEYMGR: wrote HKEY_FWR%d (size=%u) <- 0x%08x\n", index, size, hkey_fwr[index]);
+    return;
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_FRR0_OFFSET, REG_KEYMGR_HKEY_FRR_COUNT);
+  if (index >= 0) {
+    LOG_VBS("KEYMGR: ignored write to HKEY_FRR%d\n", index);
     return;
   }
 
@@ -294,18 +330,25 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
 
 Component *KEYMGR_Initialize(void) {
   memset(hkey_rwr, 0, sizeof(hkey_rwr));
+  memset(hkey_fwr, 0, sizeof(hkey_fwr));
+  memset(hkey_frr, 0, sizeof(hkey_frr));
   memset(sha_sts_h, 0, sizeof(sha_sts_h));
   memset(sha_key_w, 0, sizeof(sha_key_w));
 
   rwr_vld = 0;
   rwr_lock = 0;
+  fwr_vld = 0;
+  fw_major_version = 0;
+  fwr_lock = 0;
   hkey_err_flags = 0;
   sha_sts = 0;
   sha_itcr = 0;
   sha_use_hidden_key = 0;
   sha_execute_count_state = 0;
   sha_execute_count_max = 0;
-  cert_revoke_ctrl = 0;
+  cert_revoke_ctrl0 = 0;
+  cert_revoke_ctrl1 = 0;
+  cert_revoke_ctrl2 = 0;
   sha_msglen_lo = 0;
   sha_msglen_hi = 0;
   sha_msglen = 0;

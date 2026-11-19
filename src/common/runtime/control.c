@@ -199,8 +199,8 @@ void runtime_run(void) {
         input_index = (int)count++;
       }
 
-      if (console_output_fd() >= 0) {
-        fds[count].fd = console_output_fd();
+      if (console_stdio_fd() >= 0) {
+        fds[count].fd = console_stdio_fd();
         fds[count].events = POLLIN;
         fds[count].revents = 0;
         output_index = (int)count++;

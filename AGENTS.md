@@ -81,7 +81,7 @@ CLI:
 - `--firmware` / `-f` copies the firmware path into `ctx.firmware.progfw` and clears `ctx.firmware.useBundledFW`. H1B3C loads it into the firmware region. A path longer than `MAX_FILE_PATH - 1` exits with `RC_ARG_PATH_TOO_LONG`.
 - With a chip that defines `BUNDLED_<CHIP>`, omitting `-r`/`-f` uses that chip's bundled arrays. Otherwise the file path is required; an empty path exits with `RC_CHIPEMU_FAILED_INIT`. With `BUNDLED_FIRMWARE=0`, nothing is bundled.
 - `--verbose` / `-v` enables verbose logging.
-- `--console none|pts` selects console output. Default `none`; `pts` opens a pty, prints its slave path, and relays stdio through it until UART drives the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
+- `--console none|pts` selects console output. In multi-threaded builds the default is `pts` when stdin is a TTY and `none` otherwise; `--console none` always disables it. `pts` creates a pty, prints its slave path, and routes UART through it. T0 owns stdio: it writes stdin to the slave and copies slave output to stdout. UART reads and writes the master. An invalid mode exits with `RC_ARG_CONSOLE_INVALID`.
 - `--version` prints the build version and exits 0. The output includes the program name, `0.1.0-<commit>[-dirty]`, toolchain, unicorn version/commit, build date/unix timestamp, available chips, and bundled firmware.
 - Unknown chips exit with failure. Do not silently map them to H1B3C.
 - `-h` / `--help` prints help and exits 0 through `argcheck_check_help` or `argcheck_destroy`.
@@ -144,12 +144,12 @@ Threads:
 
 - T0 control is the main thread. It owns CLI/init, `ctx.ac`, stdio, signal handling, and teardown. Only T0 may call `emu_exit`, `uc_close`, `argcheck_destroy`, or `exit`.
 - T1 emulation owns `ctx.uc` and runs `ctx.chipemu.start_emulation()`. Runtime errors call `runtime_fault()` and return; they never exit from T1.
-- T2 console runs only with `--console pts`. It owns the pty master and the console/UART relay and never touches unicorn. Default console is `none` until UART exists.
+- T2 console runs in multi-threaded builds when stdin is a TTY or with `--console pts`; `--console none` disables it. It creates the pty, publishes the slave path, and owns the pty lifetime; it never touches unicorn or stdio. T0 owns stdio and pumps the slave; the UART worker reads and writes the master.
 - T3.. opt-in component workers run threaded peripherals. Reads are synchronous; writes are synchronous by default. Each worker owns its component state and a FIFO of ops. UART, TRNG, and KEYMGR opt in today; the framework is for components with blocking or background work (UART, TIMELS, TRNG, FLASH, KEYMGR).
 - `common/runtime/control.h` owns `Runtime`, `runtime_fault`, `runtime_start_emulation`, and `runtime_run`. `runtime_fault` is callable from any thread; `runtime_run` tears down in the order stop T1/join, stop workers, stop console, `emu_exit`.
 - `common/runtime/thread.h` owns `ThreadCtx tctx` (role, name, worker/component, `mmio_pc`). It is thread-local labels and scratch only. Never store `ctx.uc`, `ctx.ac`, or the component array in it.
 - `common/runtime/worker.h` owns the worker queue and `worker_read` / `worker_write`.
-- `common/runtime/console.h` owns `console_start` / `console_stop` and the stdio pumps used by the control poll loop.
+- `common/runtime/console.h` owns `console_start` / `console_stop`, the stdio pumps used by the control poll loop, and the UART-side pty master read/write helpers. Raw stdin keeps `ISIG` enabled, so Ctrl-C takes the SIGINT teardown path instead of reaching UART.
 - `make SINGLE_THREAD=1` bypasses T1 and all workers, runs emulation inline on T0, and rejects `--console pts`. It is the fuzz/CI path.
 - `make tsan` rebuilds with `-fsanitize=thread`; use it for any change to runtime, workers, logging, or component dispatch.
 
@@ -249,7 +249,7 @@ Thread/console smoke checks:
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, and `Himg`/`Hfss`/`Hinf` with `: 1`, then stop on the unhandled KEYMGR `HKEY_FWR0` write at `0x40573100` with status 246.
+The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then stop on the unmapped USB0 read at `0x40300e00` with status 246.
 
 Pick the smallest set that fits the change:
 

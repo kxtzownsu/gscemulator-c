@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <H1B3C/emulator.h>
 #include <common/common.h>
@@ -49,7 +50,13 @@ int main(int argc, char **argv) {
 
   argcheck_check_help(ctx.ac);
 
-  if (console_arg == NULL || strcmp(console_arg, "none") == 0) {
+  if (console_arg == NULL) {
+#ifdef SINGLE_THREAD
+    console_pts = 0;
+#else
+    console_pts = isatty(STDIN_FILENO) ? 1 : 0;
+#endif
+  } else if (strcmp(console_arg, "none") == 0) {
     console_pts = 0;
   } else if (strcmp(console_arg, "pts") == 0) {
     console_pts = 1;
