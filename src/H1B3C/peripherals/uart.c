@@ -26,11 +26,12 @@ typedef struct {
 
 static UartState uarts[3];
 
-#define UART_RMA_LINE_SIZE 64
+#define UART_RMA_LINE_SIZE 128
 
 typedef struct {
   char line[UART_RMA_LINE_SIZE];
   size_t length;
+  bool challenge;
 } UartRmaScanner;
 
 static UartRmaScanner rma_scanner;
@@ -47,7 +48,11 @@ static void uart_scan_rma_byte(uint8_t byte) {
 
   rma_scanner.line[rma_scanner.length] = '\0';
 
-  if (strcmp(rma_scanner.line, "generated challenge:") == 0) RMA_ChallengeSeen();
+  if (strcmp(rma_scanner.line, "generated challenge:") == 0) {
+    rma_scanner.challenge = true;
+  } else if (rma_scanner.challenge && rma_scanner.length != 0) {
+    if (RMA_ChallengeSeen(rma_scanner.line, rma_scanner.length)) rma_scanner.challenge = false;
+  }
 
   rma_scanner.length = 0;
 }

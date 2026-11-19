@@ -30,6 +30,8 @@ void initialize_peripherals(void) {
   Component *I2C0 = I2C_Initialize(0);
   Component *I2C1 = I2C_Initialize(1);
   Component *I2CS = I2CS_Initialize();
+  Component *TIMEHS0 = TIMEHS_Initialize(0);
+  Component *TIMEHS1 = TIMEHS_Initialize(1);
   MmioRegion regions[] = {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
@@ -57,7 +59,9 @@ void initialize_peripherals(void) {
     { .component = SPS, .base = REG_SPS_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = I2C0, .base = REG_I2C0_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = I2C1, .base = REG_I2C1_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = I2CS, .base = REG_I2CS_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
+    { .component = I2CS, .base = REG_I2CS_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = TIMEHS0, .base = REG_TIMEHS0_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = TIMEHS1, .base = REG_TIMEHS1_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
   };
 
   if (
@@ -87,7 +91,9 @@ void initialize_peripherals(void) {
       SPS == NULL ||
       I2C0 == NULL ||
       I2C1 == NULL ||
-      I2CS == NULL
+      I2CS == NULL ||
+      TIMEHS0 == NULL ||
+      TIMEHS1 == NULL
     ) {
     LOG_ERR("Failed to initialize peripherals\n");
     emu_exit(RC_CHIPEMU_FAILED_INIT);

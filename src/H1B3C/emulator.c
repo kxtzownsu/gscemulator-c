@@ -212,6 +212,7 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
   TIMELS_Poll();
   GLOBALSEC_Poll();
   GPIO_Poll();
+  TIMEHS_Poll();
   RMA_Poll();
   if ((++poll_count & 0x3Fu) == 0) component_poll_all();
 
