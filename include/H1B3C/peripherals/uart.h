@@ -3,13 +3,18 @@
 
 #include <common/peripherals/component.h>
 
-#define REG_UART_BASE_ADDR 0x40600000
+#define REG_UART0_BASE_ADDR 0x40600000
+#define REG_UART1_BASE_ADDR 0x40610000
+#define REG_UART2_BASE_ADDR 0x40620000
 #define REG_UART_RDATA_OFFSET 0x0
 #define REG_UART_WDATA_OFFSET 0x4
 #define REG_UART_NCO_OFFSET 0x8
 #define REG_UART_CTRL_OFFSET 0xC
+#define REG_UART_ICTRL_OFFSET 0x10
 #define REG_UART_STATE_OFFSET 0x14
+#define REG_UART_ISTATECLR_OFFSET 0x20
+#define REG_UART_FIFO_OFFSET 0x24
 
-Component *UART_Initialize(void);
+Component *UART_Initialize(unsigned index);
 
 #endif /* H1B3C_PERIPHERALS_UART_H */

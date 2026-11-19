@@ -20,6 +20,11 @@ COMPONENTS = [
     "M3",
     "GPIO",
     "USB",
+    "RTC",
+    "TIMELS",
+    "WATCHDOG",
+    "RBOX",
+    "CRYPTO",
     "XO",
     "SWDP",
 ]
@@ -53,6 +58,11 @@ RANGES = [
      lambda name: name.startswith("MASKLOWBYTE_")),
     ("GPIO", "REG_GPIO_MASKHIGHBYTE_OFFSET", "REG_GPIO_MASK_COUNT",
      lambda name: name.startswith("MASKHIGHBYTE_")),
+    ("RBOX", "REG_RBOX_OFFSET", "REG_RBOX_COUNT", lambda name: True),
+    ("CRYPTO", "REG_CRYPTO_OFFSET", "REG_CRYPTO_COUNT", lambda name: True),
+    ("CRYPTO", "REG_CRYPTO_DMEM_OFFSET", "REG_CRYPTO_DMEM_COUNT", lambda name: True),
+    ("CRYPTO", "REG_CRYPTO_IMEM_OFFSET", "REG_CRYPTO_IMEM_COUNT", lambda name: True),
+    ("XO", "REG_XO_OFFSET", "REG_XO_COUNT", lambda name: True),
     ("PINMUX", None, "REG_PINMUX_REG_COUNT", lambda name: True),
 ]
 
@@ -60,6 +70,16 @@ DEFINE_RE = re.compile(r"#define\s+([A-Z0-9_]+)\s+(0x[0-9a-fA-F]+|\d+)")
 OFFSET_RE = re.compile(r"^REG_([A-Z0-9]+)_([A-Z0-9_]+)_OFFSET$")
 
 KNOWN_GAPS = []
+
+RANGE_SKIP_COVERAGE = {
+    "REG_M3_NVIC_IPR_COUNT": "ARMv7-M has 64 IPR words; hw_b1 only lists the first 8",
+    "REG_CRYPTO_DMEM_COUNT": "hw_b1 lists only the DMEM base; accelerator memory is 1024 words",
+    "REG_CRYPTO_IMEM_COUNT": "hw_b1 lists only the IMEM base; accelerator memory is 1024 words",
+}
+
+HEADER_SKIP = {
+    "REG_M3_NVIC_STIR_OFFSET": "ARMv7-M NVIC STIR; hw_b1 regdefs omit it",
+}
 
 
 def repo_root() -> Path:
@@ -159,6 +179,8 @@ def main() -> int:
             component = "FUSE"
         elif var in ("GPIO0", "GPIO1"):
             component = "GPIO"
+        elif var in ("UART0", "UART1", "UART2"):
+            component = "UART"
         else:
             component = var.upper()
         mapped.add(component)
@@ -188,6 +210,9 @@ def main() -> int:
                 continue
             if match.group(2) == "BASE_ADDR":
                 continue
+            if macro in HEADER_SKIP:
+                print(f"audit-mmio: note: skipped {macro}: {HEADER_SKIP[macro]}")
+                continue
             if int(value, 0) not in hw[component]:
                 errors.append(
                     f"{component}: {macro}=0x{int(value, 0):x} "
@@ -211,6 +236,11 @@ def main() -> int:
                     f"{component}: {count_macro} range 0x{base:x}..0x{end - 1:x} "
                     f"overlaps {other_name} 0x{other_base:x}..0x{other_end - 1:x}")
         covered[component].append((base, end, count_macro))
+
+        if count_macro in RANGE_SKIP_COVERAGE:
+            print(f"audit-mmio: note: skipped coverage for {count_macro}: "
+                  f"{RANGE_SKIP_COVERAGE[count_macro]}")
+            continue
 
         for offset in range(base, end, 4):
             names = hw[component].get(offset, [])

@@ -1,40 +1,49 @@
 #include <H1B3C/peripherals/xo.h>
 
+#include <stdint.h>
+#include <string.h>
+
 #include <common/logger.h>
-#include <common/peripherals/define.h>
 
-DEFINE_BASIC_REGISTER(clk_jtr_sync_contents)
+static uint32_t xo_regs[REG_XO_COUNT];
 
-static const BasicRegister xo_registers[] = {
-  BASIC_REGISTER_ENTRY(REG_XO_CLK_JTR_SYNC_CONTENTS_OFFSET, clk_jtr_sync_contents),
-};
+static int xo_index(uint64_t offset) {
+  uint64_t end = (uint64_t)REG_XO_OFFSET + (uint64_t)REG_XO_COUNT * sizeof(uint32_t);
+
+  if ((offset & 3u) != 0) return -1;
+  if (offset >= end) return -1;
+
+  return (int)((offset - REG_XO_OFFSET) / sizeof(uint32_t));
+}
 
 static uint64_t XO_Read(Component *self, uint64_t offset, unsigned size) {
-  const BasicRegister *reg = basic_register_find(xo_registers, ARRAY_LEN(xo_registers), offset);
+  int index = xo_index(offset);
 
-  if (reg != NULL) {
-    LOG_VBS("XO: read %s (size=%u) -> 0x%08x\n", reg->name, size, *reg->value);
-    return *reg->value;
+  if (index < 0) {
+    component_log_unhandled(self, "read", offset);
+    return 0;
   }
 
-  component_log_unhandled(self, "read", offset);
-  return 0;
+  LOG_VBS("XO: read 0x%03llx (size=%u) -> 0x%08x\n", (unsigned long long)offset, size,
+          xo_regs[index]);
+  return xo_regs[index];
 }
 
 static void XO_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
-  const BasicRegister *reg = basic_register_find(xo_registers, ARRAY_LEN(xo_registers), offset);
+  int index = xo_index(offset);
 
-  if (reg != NULL) {
-    *reg->value = (uint32_t)value;
-    LOG_VBS("XO: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
+  if (index < 0) {
+    component_log_unhandled(self, "write", offset);
     return;
   }
 
-  component_log_unhandled(self, "write", offset);
+  xo_regs[index] = (uint32_t)value;
+  LOG_VBS("XO: wrote 0x%03llx (size=%u) <- 0x%08x\n", (unsigned long long)offset, size,
+          xo_regs[index]);
 }
 
 Component *XO_Initialize(void) {
-  clk_jtr_sync_contents = 0;
+  memset(xo_regs, 0, sizeof(xo_regs));
 
   return component_register("XO", NULL, XO_Read, XO_Write);
 }

@@ -25,10 +25,25 @@ if "$BIN" --console bogus >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -n "${VERIFY_BOOTROM:-}" ]; then
-  "$BIN" -r "$VERIFY_BOOTROM" -v >/dev/null
+if [ -n "${VERIFY_BOOTROM:-}" ] && [ -n "${VERIFY_FIRMWARE:-}" ]; then
+  set +e
+  timeout -s INT 20 "$BIN" -r "$VERIFY_BOOTROM" -f "$VERIFY_FIRMWARE" >"$TMP_O" 2>&1
+  boot_rc=$?
+  set -e
+
+  if [ "$boot_rc" -ne 124 ] && [ "$boot_rc" -ne 245 ]; then
+    cat "$TMP_O" >&2
+    echo "verify-c: boot lifecycle exited with $boot_rc" >&2
+    exit 1
+  fi
+
+  if ! grep -q "Inits done" "$TMP_O"; then
+    cat "$TMP_O" >&2
+    echo "verify-c: boot lifecycle did not reach Inits done" >&2
+    exit 1
+  fi
 else
-  echo "verify-c: VERIFY_BOOTROM not set, skipped the boot lifecycle" >&2
+  echo "verify-c: VERIFY_BOOTROM/VERIFY_FIRMWARE not set, skipped the boot lifecycle" >&2
 fi
 
 if "$BIN" --chip invalid >/dev/null 2>&1; then
@@ -71,7 +86,12 @@ if command -v gcc >/dev/null 2>&1; then
     src/H1B3C/peripherals/xo.c \
     src/H1B3C/peripherals/gpio.c \
     src/H1B3C/peripherals/keymgr.c \
-    src/H1B3C/peripherals/flash.c; do
+    src/H1B3C/peripherals/flash.c \
+    src/H1B3C/peripherals/rtc.c \
+    src/H1B3C/peripherals/timels.c \
+    src/H1B3C/peripherals/watchdog.c \
+    src/H1B3C/peripherals/rbox.c \
+    src/H1B3C/peripherals/crypto.c; do
     "${ANALYZE[@]}" -c "$src" -o "$TMP_O"
   done
 fi

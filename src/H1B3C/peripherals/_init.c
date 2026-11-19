@@ -8,7 +8,9 @@ void initialize_peripherals(void) {
   Component *GLOBALSEC = GLOBALSEC_Initialize();
   Component *PMU = PMU_Initialize();
   Component *PINMUX = PINMUX_Initialize();
-  Component *UART = UART_Initialize();
+  Component *UART0 = UART_Initialize(0);
+  Component *UART1 = UART_Initialize(1);
+  Component *UART2 = UART_Initialize(2);
   Component *TRNG = TRNG_Initialize();
   Component *SWDP = SWDP_Initialize();
   Component *XO = XO_Initialize();
@@ -17,13 +19,20 @@ void initialize_peripherals(void) {
   Component *KEYMGR = KEYMGR_Initialize();
   Component *FLASH = FLASH_Initialize();
   Component *USB = USB_Initialize();
+  Component *RTC = RTC_Initialize();
+  Component *TIMELS = TIMELS_Initialize();
+  Component *WATCHDOG = WATCHDOG_Initialize();
+  Component *RBOX = RBOX_Initialize();
+  Component *CRYPTO = CRYPTO_Initialize();
   MmioRegion regions[] = {
     { .component = M3, .base = REG_M3_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = eFuses, .base = REG_FUSE_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = GLOBALSEC, .base = REG_GLOBALSEC_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = PMU, .base = REG_PMU_BASE_ADDR, .size = REG_PMU_LENGTH },
     { .component = PINMUX, .base = REG_PINMUX_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = UART, .base = REG_UART_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = UART0, .base = REG_UART0_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = UART1, .base = REG_UART1_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = UART2, .base = REG_UART2_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = TRNG, .base = REG_TRNG_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = SWDP, .base = REG_SWDP_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = XO, .base = REG_XO_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
@@ -31,7 +40,12 @@ void initialize_peripherals(void) {
     { .component = GPIO1, .base = REG_GPIO1_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = KEYMGR, .base = REG_KEYMGR_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
     { .component = FLASH, .base = REG_FLASH_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
-    { .component = USB, .base = REG_USB_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
+    { .component = USB, .base = REG_USB_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = RTC, .base = REG_RTC_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = TIMELS, .base = REG_TIMELS_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = WATCHDOG, .base = REG_WATCHDOG_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = RBOX, .base = REG_RBOX_BASE_ADDR, .size = DEFAULT_REG_LENGTH },
+    { .component = CRYPTO, .base = REG_CRYPTO_BASE_ADDR, .size = DEFAULT_REG_LENGTH }
   };
 
   if (
@@ -40,7 +54,9 @@ void initialize_peripherals(void) {
       GLOBALSEC == NULL ||
       PMU == NULL ||
       PINMUX == NULL ||
-      UART == NULL ||
+      UART0 == NULL ||
+      UART1 == NULL ||
+      UART2 == NULL ||
       TRNG == NULL ||
       SWDP == NULL ||
       XO == NULL ||
@@ -48,7 +64,12 @@ void initialize_peripherals(void) {
       GPIO1 == NULL ||
       KEYMGR == NULL ||
       FLASH == NULL ||
-      USB == NULL
+      USB == NULL ||
+      RTC == NULL ||
+      TIMELS == NULL ||
+      WATCHDOG == NULL ||
+      RBOX == NULL ||
+      CRYPTO == NULL
     ) {
     LOG_ERR("Failed to initialize peripherals\n");
     emu_exit(RC_CHIPEMU_FAILED_INIT);

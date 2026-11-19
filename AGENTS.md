@@ -249,7 +249,7 @@ Thread/console smoke checks:
 printf 'hello\n' | timeout -s INT 2 ./build/$(uname -m)/gscemu --console pts -r <loop-rom> -f <loop-rom>
 ```
 
-The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then stop on the unhandled M3 `NVIC_ICER` write at `0xE180` with status 246.
+The boot smoke test must print the full `Havn2|...` banner, `exp ?36`, `Himg`, `Hfss`, `Hinf`, `exp ?40`, `exp ?40`, `exp ?59`, and `jump @00040400`, then print `Bldr |<n>` (a nonzero 24 MHz cycle count), `retry|0`, `oops?|no`, `Himg`/`Hfss`/`Hinf` with `: 1`, `devm :0`, and `jump @44000`, then the RW banner (`--- UART initialized after reboot ---`, reset cause, image string, and `Inits done`), and keep running until interrupted.
 
 Pick the smallest set that fits the change:
 

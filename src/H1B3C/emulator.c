@@ -14,8 +14,197 @@
 #include <common/bundled-firmware.h>
 #endif
 
+#define EXC_RETURN_HANDLER 0xFFFFFFF1u
+#define EXC_RETURN_MSP 0xFFFFFFF9u
+#define EXC_RETURN_PSP 0xFFFFFFFDu
+
+static void exc_push(uc_engine *uc, uint32_t *sp, uint32_t value) {
+  *sp -= 4;
+  (void)uc_mem_write(uc, *sp, &value, sizeof(value));
+}
+
+static uint32_t exc_pop(uc_engine *uc, uint32_t *sp) {
+  uint32_t value = 0;
+
+  (void)uc_mem_read(uc, *sp, &value, sizeof(value));
+  *sp += 4;
+  return value;
+}
+
+static void enter_exception(uc_engine *uc, uint32_t exc_num) {
+  uint32_t pc = 0;
+  uint32_t control = 0;
+  uint32_t ipsr = 0;
+  uint32_t xpsr = 0;
+  uint32_t lr = 0;
+  uint32_t sp = 0;
+  uint32_t exc_return;
+  uint32_t vector;
+  uint32_t handler_pc;
+  uint32_t regs[8];
+  unsigned i;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+  (void)uc_reg_read(uc, UC_ARM_REG_CONTROL, &control);
+  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
+  (void)uc_reg_read(uc, UC_ARM_REG_XPSR, &xpsr);
+  (void)uc_reg_read(uc, UC_ARM_REG_LR, &lr);
+
+  if ((control & 2u) != 0 && ipsr == 0) {
+    (void)uc_reg_read(uc, UC_ARM_REG_PSP, &sp);
+    exc_return = EXC_RETURN_PSP;
+  } else {
+    (void)uc_reg_read(uc, UC_ARM_REG_MSP, &sp);
+    exc_return = ipsr != 0 ? EXC_RETURN_HANDLER : EXC_RETURN_MSP;
+  }
+
+  regs[0] = xpsr;
+  regs[1] = pc | 1u;
+  regs[2] = lr;
+  (void)uc_reg_read(uc, UC_ARM_REG_R12, &regs[3]);
+  (void)uc_reg_read(uc, UC_ARM_REG_R3, &regs[4]);
+  (void)uc_reg_read(uc, UC_ARM_REG_R2, &regs[5]);
+  (void)uc_reg_read(uc, UC_ARM_REG_R1, &regs[6]);
+  (void)uc_reg_read(uc, UC_ARM_REG_R0, &regs[7]);
+
+  for (i = 0; i < 8; i++) exc_push(uc, &sp, regs[i]);
+
+  if (exc_return == EXC_RETURN_PSP) {
+    (void)uc_reg_write(uc, UC_ARM_REG_PSP, &sp);
+  } else {
+    (void)uc_reg_write(uc, UC_ARM_REG_MSP, &sp);
+  }
+
+  (void)uc_reg_write(uc, UC_ARM_REG_LR, &exc_return);
+  (void)uc_reg_write(uc, UC_ARM_REG_IPSR, &exc_num);
+
+  xpsr = 0;
+  (void)uc_reg_read(uc, UC_ARM_REG_EPSR, &xpsr);
+  xpsr &= ~0x600FC00u;
+  (void)uc_reg_write(uc, UC_ARM_REG_EPSR, &xpsr);
+
+  vector = M3_GetVtor() + exc_num * 4u;
+  if (uc_mem_read(uc, vector, &handler_pc, sizeof(handler_pc)) != UC_ERR_OK) {
+    LOG_ERR("Exception %u: failed to read vector at 0x%08x\n", exc_num, vector);
+    return;
+  }
+
+  LOG_VBS("Exception %u: entering handler at 0x%08x\n", exc_num, handler_pc);
+  (void)uc_reg_write(uc, UC_ARM_REG_PC, &handler_pc);
+}
+
+static void handle_svc(uc_engine *uc) {
+  uint32_t pc = 0;
+  uint32_t ret_pc;
+  uint16_t insn = 0;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+
+  ret_pc = pc;
+  if (uc_mem_read(uc, pc, &insn, sizeof(insn)) == UC_ERR_OK &&
+      (insn & 0xFF00u) == 0xDF00u) {
+    ret_pc = pc + 2;
+  }
+
+  (void)uc_reg_write(uc, UC_ARM_REG_PC, &ret_pc);
+  enter_exception(uc, 11);
+}
+
+static void handle_exc_return(uc_engine *uc) {
+  uint32_t pc = 0;
+  uint32_t sp = 0;
+  uint32_t value;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_PC, &pc);
+
+  if ((pc | 1u) == EXC_RETURN_PSP) {
+    (void)uc_reg_read(uc, UC_ARM_REG_PSP, &sp);
+  } else {
+    (void)uc_reg_read(uc, UC_ARM_REG_MSP, &sp);
+  }
+
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_R0, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_R1, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_R2, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_R3, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_R12, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_LR, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_PC, &value);
+  value = exc_pop(uc, &sp);
+  (void)uc_reg_write(uc, UC_ARM_REG_XPSR, &value);
+
+  if ((pc | 1u) == EXC_RETURN_PSP) {
+    (void)uc_reg_write(uc, UC_ARM_REG_PSP, &sp);
+  } else {
+    (void)uc_reg_write(uc, UC_ARM_REG_MSP, &sp);
+  }
+
+  {
+    uint32_t zero = 0;
+
+    (void)uc_reg_write(uc, UC_ARM_REG_IPSR, &zero);
+  }
+}
+
+static void wfi_skip_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+  uint16_t insn;
+  uint32_t next;
+
+  (void)size;
+  (void)user_data;
+
+  if (uc_mem_read(uc, address, &insn, sizeof(insn)) != UC_ERR_OK) return;
+  if (insn != 0xBF30u) return;
+
+  next = ((uint32_t)address + 2) | 1u;
+  (void)uc_reg_write(uc, UC_ARM_REG_PC, &next);
+}
+
+static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+  uint32_t ipsr = 0;
+  uint32_t primask = 0;
+  uint32_t faultmask = 0;
+  int irq;
+
+  (void)address;
+  (void)size;
+  (void)user_data;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
+  if (ipsr != 0) return;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_PRIMASK, &primask);
+  (void)uc_reg_read(uc, UC_ARM_REG_FAULTMASK, &faultmask);
+  if (primask != 0 || faultmask != 0) return;
+
+  TIMELS_Poll();
+
+  irq = M3_TakePendingIrq();
+  if (irq >= 0) enter_exception(uc, 16u + (uint32_t)irq);
+}
+
+static void intr_hook(uc_engine *uc, uint32_t intno, void *user_data) {
+  (void)user_data;
+
+  if (intno == 2) {
+    handle_svc(uc);
+  } else if (intno == 8) {
+    handle_exc_return(uc);
+  } else {
+    LOG_VBS("Unhandled interrupt %u\n", intno);
+  }
+}
+
 void init_unicorn(void){
   uc_err err;
+  uc_hook hook;
   err = uc_open(UC_ARCH_ARM, UC_MODE_THUMB | UC_MODE_MCLASS, &ctx.uc);
   if (err != UC_ERR_OK) {
     ctx.uc = NULL;
@@ -34,6 +223,24 @@ void init_unicorn(void){
   LOG_VBS("Set CPU to Cortex-M3\n");
 
   install_memory_fault_hook();
+
+  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_INTR, (void *)intr_hook, NULL, 1, 0);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("Failed to install interrupt hook: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
+
+  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_CODE, (void *)wfi_skip_hook, NULL, 1, 0);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("Failed to install WFI hook: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
+
+  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_BLOCK, (void *)m3_block_hook, NULL, 1, 0);
+  if (err != UC_ERR_OK) {
+    LOG_ERR("Failed to install block hook: %s\n", uc_strerror(err));
+    emu_exit(RC_CHIPEMU_FAILED_INIT);
+  }
 }
 
 void Havn_Initialize(void) {
@@ -119,6 +326,14 @@ void Havn_StartEmulation(void) {
 
   err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
 
+  {
+    uint32_t stop_pc = 0;
+
+    if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &stop_pc) == UC_ERR_OK) {
+      LOG_VBS("Emulation stopped at PC=0x%08x\n", stop_pc);
+    }
+  }
+
   if (memory_fault_occurred()) {
     LOG_ERR("Emulation stopped due to a memory fault\n");
     runtime_fault(RC_CHIPEMU_MEMORY_FAULT, "emulation stopped due to a memory fault");
@@ -126,7 +341,15 @@ void Havn_StartEmulation(void) {
   }
 
   if (err != UC_ERR_OK) {
-    LOG_ERR("Emulation stopped with error: %s\n", uc_strerror(err));
+    uint32_t fault_pc = 0;
+    uint32_t fault_lr = 0;
+    uint32_t fault_sp = 0;
+
+    (void)uc_reg_read(ctx.uc, UC_ARM_REG_PC, &fault_pc);
+    (void)uc_reg_read(ctx.uc, UC_ARM_REG_LR, &fault_lr);
+    (void)uc_reg_read(ctx.uc, UC_ARM_REG_SP, &fault_sp);
+    LOG_ERR("Emulation stopped with error: %s (pc=0x%08x lr=0x%08x sp=0x%08x)\n",
+            uc_strerror(err), fault_pc, fault_lr, fault_sp);
     runtime_fault(RC_CHIPEMU_EMULATION_ERROR, "%s", uc_strerror(err));
     return;
   }

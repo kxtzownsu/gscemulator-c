@@ -14,7 +14,7 @@ Run the bundled script:
 It checks:
 
 - `make clean && make BUNDLED_FIRMWARE=0`
-- `--help`, `--version`, a run without `--bootrom` exiting non-zero (source-only build), and `-r <bootrom> -v`
+- `--help`, `--version`, a run without `--bootrom` exiting non-zero (source-only build), and a `-r <bootrom> -f <firmware>` boot to `Inits done` when `VERIFY_BOOTROM`/`VERIFY_FIRMWARE` are set
 - an invalid chip exits non-zero
 - an invalid `--console` mode exits non-zero
 - `make fuzz FUZZ_TIME=1` when clang is available
@@ -29,7 +29,7 @@ BIN="build/$(uname -m)/gscemu"
 "$BIN" --version
 "$BIN" || true                    # exits 252 without --bootrom
 "$BIN" --console bogus || true    # exits 244
-"$BIN" -r <bootrom> -v
+timeout -s INT 20 "$BIN" -r <bootrom> -f <firmware>   # expect Inits done, 124/245
 "$BIN" --chip invalid || true
 make fuzz FUZZ_TIME=1
 ```

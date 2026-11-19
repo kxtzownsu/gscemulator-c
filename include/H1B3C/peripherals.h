@@ -14,6 +14,11 @@
 #include <H1B3C/peripherals/keymgr.h>
 #include <H1B3C/peripherals/flash.h>
 #include <H1B3C/peripherals/usb.h>
+#include <H1B3C/peripherals/rtc.h>
+#include <H1B3C/peripherals/timels.h>
+#include <H1B3C/peripherals/watchdog.h>
+#include <H1B3C/peripherals/rbox.h>
+#include <H1B3C/peripherals/crypto.h>
 
 #define DEFAULT_REG_LENGTH 0x10000
 

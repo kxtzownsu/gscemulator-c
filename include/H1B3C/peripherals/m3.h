@@ -4,14 +4,49 @@
 #include <common/peripherals/component.h>
 
 #define REG_M3_BASE_ADDR 0xE0000000
+#define REG_M3_SYST_CSR_OFFSET 0xE010
+#define REG_M3_SYST_RVR_OFFSET 0xE014
+#define REG_M3_SYST_CVR_OFFSET 0xE018
+#define REG_M3_SYST_CALIB_OFFSET 0xE01C
+#define REG_M3_NVIC_ISER_OFFSET 0xE100
+#define REG_M3_NVIC_ISER_COUNT 8
+#define REG_M3_NVIC_ICER_OFFSET 0xE180
+#define REG_M3_NVIC_ICER_COUNT 8
+#define REG_M3_NVIC_ISPR_OFFSET 0xE200
+#define REG_M3_NVIC_ISPR_COUNT 8
+#define REG_M3_NVIC_ICPR_OFFSET 0xE280
+#define REG_M3_NVIC_ICPR_COUNT 8
+#define REG_M3_NVIC_IPR_OFFSET 0xE400
+#define REG_M3_NVIC_IPR_COUNT 64
 #define REG_M3_DWT_CTRL_OFFSET 0x1000
 #define REG_M3_DWT_CYCCNT_OFFSET 0x1004
 #define REG_M3_CPUID_OFFSET 0xED00
 #define REG_M3_VTOR_OFFSET 0xED08
+#define REG_M3_CCR_OFFSET 0xED14
+#define REG_M3_SHCSR_OFFSET 0xED24
+#define REG_M3_CFSR_OFFSET 0xED28
+#define REG_M3_HFSR_OFFSET 0xED2C
+#define REG_M3_DFSR_OFFSET 0xED30
+#define REG_M3_MMFAR_OFFSET 0xED34
+#define REG_M3_BFAR_OFFSET 0xED38
 #define REG_M3_DEMCR_OFFSET 0xEDFC
 #define REG_M3_ITCMCR_OFFSET 0xEF90
+#define REG_M3_NVIC_STIR_OFFSET 0xEF00
+
+_Static_assert(REG_M3_NVIC_ISER_OFFSET + REG_M3_NVIC_ISER_COUNT * 4 <= REG_M3_NVIC_ICER_OFFSET,
+               "NVIC_ISER overlaps NVIC_ICER");
+_Static_assert(REG_M3_NVIC_ICER_OFFSET + REG_M3_NVIC_ICER_COUNT * 4 <= REG_M3_NVIC_ISPR_OFFSET,
+               "NVIC_ICER overlaps NVIC_ISPR");
+_Static_assert(REG_M3_NVIC_ISPR_OFFSET + REG_M3_NVIC_ISPR_COUNT * 4 <= REG_M3_NVIC_ICPR_OFFSET,
+               "NVIC_ISPR overlaps NVIC_ICPR");
+_Static_assert(REG_M3_NVIC_ICPR_OFFSET + REG_M3_NVIC_ICPR_COUNT * 4 <= REG_M3_NVIC_IPR_OFFSET,
+               "NVIC_ICPR overlaps NVIC_IPR");
 
 Component *M3_Initialize(void);
 void M3_StartCycleCount(void);
+uint32_t M3_GetVtor(void);
+void M3_PendIrq(unsigned irq);
+void M3_UnpendIrq(unsigned irq);
+int M3_TakePendingIrq(void);
 
 #endif /* H1B3C_PERIPHERALS_M3_H */

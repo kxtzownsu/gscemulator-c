@@ -16,6 +16,9 @@ static int pe_control = -1;
 static uint32_t error;
 static uint32_t dout_val[2];
 static uint32_t protect_info1_erase;
+static uint32_t prog_smart_algo;
+static uint32_t erase_smart_algo;
+static uint32_t bulkerase_smart_algo;
 static uint32_t wr_data[REG_FLASH_WR_DATA_COUNT];
 
 static int wr_data_index(uint64_t offset) {
@@ -44,6 +47,12 @@ static uint64_t FLASH_Read(Component *self, uint64_t offset, unsigned size) {
       return trans_offset | (trans_mainb << 16) | (trans_size << 17);
     case REG_FLASH_PROTECT_INFO1_ERASE_OFFSET:
       return protect_info1_erase;
+    case REG_FLASH_TIMING_PROG_SMART_ALGO_ON_OFFSET:
+      return prog_smart_algo;
+    case REG_FLASH_TIMING_ERASE_SMART_ALGO_ON_OFFSET:
+      return erase_smart_algo;
+    case REG_FLASH_TIMING_BULKERASE_SMART_ALGO_ON_OFFSET:
+      return bulkerase_smart_algo;
     case REG_FLASH_DOUT_VAL0_OFFSET:
       return dout_val[0];
     case REG_FLASH_DOUT_VAL1_OFFSET:
@@ -92,6 +101,15 @@ static void FLASH_Write(Component *self, uint64_t offset, unsigned size, uint64_
     case REG_FLASH_PROTECT_INFO1_ERASE_OFFSET:
       protect_info1_erase = (uint32_t)value & 1u;
       return;
+    case REG_FLASH_TIMING_PROG_SMART_ALGO_ON_OFFSET:
+      prog_smart_algo = (uint32_t)value & 1u;
+      return;
+    case REG_FLASH_TIMING_ERASE_SMART_ALGO_ON_OFFSET:
+      erase_smart_algo = (uint32_t)value & 1u;
+      return;
+    case REG_FLASH_TIMING_BULKERASE_SMART_ALGO_ON_OFFSET:
+      bulkerase_smart_algo = (uint32_t)value & 1u;
+      return;
     case REG_FLASH_DOUT_VAL0_OFFSET:
     case REG_FLASH_DOUT_VAL1_OFFSET:
       return;
@@ -117,6 +135,9 @@ Component *FLASH_Initialize(void) {
   dout_val[0] = 0;
   dout_val[1] = 0;
   protect_info1_erase = 0;
+  prog_smart_algo = 0;
+  erase_smart_algo = 0;
+  bulkerase_smart_algo = 0;
 
   for (unsigned i = 0; i < REG_FLASH_WR_DATA_COUNT; i++) wr_data[i] = 0;
 

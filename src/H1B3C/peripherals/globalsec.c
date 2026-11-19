@@ -19,11 +19,13 @@ DEFINE_BASIC_REGISTER(alert_control)
 DEFINE_BASIC_REGISTER(dbg_control)
 DEFINE_BASIC_REGISTER(alert_intr_sts0)
 DEFINE_BASIC_REGISTER(alert_intr_sts1)
+DEFINE_BASIC_REGISTER(obfs_sw_en)
 
 static const BasicRegister globalsec_registers[] = {
   BASIC_REGISTER_ENTRY(REG_GLOBALSEC_ALERT_INTR_STS0_OFFSET, alert_intr_sts0),
   BASIC_REGISTER_ENTRY(REG_GLOBALSEC_ALERT_INTR_STS1_OFFSET, alert_intr_sts1),
   BASIC_REGISTER_ENTRY(REG_GLOBALSEC_ALERT_CONTROL_OFFSET, alert_control),
+  BASIC_REGISTER_ENTRY(REG_GLOBALSEC_OBFS_SW_EN_OFFSET, obfs_sw_en),
   BASIC_REGISTER_ENTRY(REG_GLOBALSEC_DBG_CONTROL_OFFSET, dbg_control),
 };
 
@@ -213,6 +215,7 @@ Component *GLOBALSEC_Initialize(void) {
   alert_intr_sts0 = 0;
   alert_intr_sts1 = 0;
   dbg_control = 0;
+  obfs_sw_en = 0;
   sb_comp_status = false;
   hide_rom = 0;
 
