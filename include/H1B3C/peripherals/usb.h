@@ -1,6 +1,9 @@
 #ifndef H1B3C_PERIPHERALS_USB_H
 #define H1B3C_PERIPHERALS_USB_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include <common/peripherals/component.h>
 
 #define REG_USB_BASE_ADDR 0x40300000
@@ -96,6 +99,45 @@
 #define REG_USB_DOEPDMA0_OFFSET 0xB14
 #define REG_USB_DOEPDMAB0_OFFSET 0xB1C
 #define REG_USB_PCGCCTL_OFFSET 0xE00
+
+#define REG_USB_DIEPTXF_BLOCK_OFFSET 0x104
+#define REG_USB_DIEPTXF_BLOCK_COUNT 15
+#define REG_USB_DIEPTXF_STRIDE 4
+#define REG_USB_DIEP_BLOCK_OFFSET 0x900
+#define REG_USB_DIEP_BLOCK_COUNT 16
+#define REG_USB_DOEP_BLOCK_OFFSET 0xB00
+#define REG_USB_DOEP_BLOCK_COUNT 16
+#define REG_USB_ENDPOINT_STRIDE 0x20
+
+_Static_assert(REG_USB_DIEP_BLOCK_OFFSET + REG_USB_DIEP_BLOCK_COUNT * REG_USB_ENDPOINT_STRIDE ==
+                   REG_USB_DOEP_BLOCK_OFFSET,
+               "DIEP block must end at DOEP block");
+_Static_assert(REG_USB_DOEP_BLOCK_OFFSET + REG_USB_DOEP_BLOCK_COUNT * REG_USB_ENDPOINT_STRIDE == 0xD00,
+               "DOEP block must end at 0xD00");
+_Static_assert(REG_USB_DIEPTXF_BLOCK_OFFSET + REG_USB_DIEPTXF_BLOCK_COUNT * REG_USB_DIEPTXF_STRIDE ==
+                   0x140,
+               "DIEPTXF block must end at 0x140");
+
+typedef struct {
+  void (*connect)(void);
+  void (*disconnect)(void);
+  void (*endpoint_enable)(uint8_t address, uint8_t type, uint16_t max_packet, uint8_t interval);
+  void (*endpoint_disable)(uint8_t address);
+  void (*out_enable)(uint8_t address);
+  void (*ep0_in)(const uint8_t *data, size_t len);
+  void (*ep0_status)(void);
+  void (*ep0_stall)(void);
+  void (*ep_in)(uint8_t address, const uint8_t *data, size_t len);
+  void (*ep_stall)(uint8_t address);
+} UsbHostOps;
+
+void USB_SetHostOps(const UsbHostOps *ops);
+void USB_HostSetup(const uint8_t setup[8]);
+void USB_HostEpOut(uint8_t address, const uint8_t *data, size_t len);
+void USB_HostEpInDone(uint8_t address);
+void USB_HostEp0Done(void);
+void USB_HostReset(void);
+void USB_Poll(void);
 
 Component *USB_Initialize(void);
 

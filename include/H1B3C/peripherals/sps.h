@@ -1,6 +1,10 @@
 #ifndef H1B3C_PERIPHERALS_SPS_H
 #define H1B3C_PERIPHERALS_SPS_H
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <common/peripherals/component.h>
 
 #define REG_SPS_BASE_ADDR 0x40510000
@@ -30,7 +34,20 @@
 #define REG_SPS_ITCR_OFFSET 0x5C
 #define REG_SPS_ITOP_OFFSET 0x60
 #define REG_SPS_ICTRL_OFFSET 0x64
+#define REG_SPS_TXFIFO_OFFSET 0x1000u
+#define REG_SPS_FIFO_SIZE 0x400u
+#define REG_SPS_RXFIFO_OFFSET (REG_SPS_TXFIFO_OFFSET + REG_SPS_FIFO_SIZE)
+#define REG_SPS_FIFO_END_OFFSET (REG_SPS_RXFIFO_OFFSET + REG_SPS_FIFO_SIZE)
+
+_Static_assert(REG_SPS_RXFIFO_OFFSET == REG_SPS_TXFIFO_OFFSET + REG_SPS_FIFO_SIZE,
+               "SPS TX/RX FIFOs must be adjacent");
+_Static_assert(REG_SPS_FIFO_END_OFFSET <= 0x10000, "SPS FIFOs must fit in the MMIO region");
 
 Component *SPS_Initialize(void);
+
+bool SPS_HostSetChipSelect(bool asserted);
+bool SPS_HostTransfer(const uint8_t *input, uint8_t *output, size_t len);
+bool SPS_HostWaitIdle(uint32_t timeout_ms);
+bool SPS_HostWaitDeassert(uint32_t timeout_ms);
 
 #endif /* H1B3C_PERIPHERALS_SPS_H */

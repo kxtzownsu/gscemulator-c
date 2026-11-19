@@ -1,8 +1,10 @@
 #define _GNU_SOURCE
 
+#include <H1B3C/peripherals/gpio.h>
 #include <H1B3C/proxies.h>
+#include <H1B3C/tpm-proxy.h>
+#include <H1B3C/usb-proxy.h>
 
-#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -23,18 +25,8 @@ void H1B3C_StopProxies(void) {}
 
 #else
 
-typedef struct {
-  const char *name;
-  pthread_t thread;
-  bool started;
-} Proxy;
-
-static pthread_mutex_t proxy_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t proxy_cond = PTHREAD_COND_INITIALIZER;
-static bool proxy_stop;
-
-static Proxy tpm_proxy = { .name = "vtpm-proxy" };
-static Proxy usb_proxy = { .name = "usb-proxy" };
+static bool tpm_proxy_started;
+static bool usb_proxy_started;
 
 static bool path_exists(const char *path) {
   return access(path, F_OK) == 0;
@@ -68,58 +60,47 @@ static bool usb_proxy_requirements(void) {
   if (!module_loaded("dummy_hcd")) return confirm_without("dummy_hcd", "the USB proxy");
   if (!module_loaded("raw_gadget")) return confirm_without("raw_gadget", "the USB proxy");
   if (!path_exists("/dev/raw-gadget")) return confirm_without("/dev/raw-gadget", "the USB proxy");
+  if (access("/dev/raw-gadget", R_OK | W_OK) != 0) {
+    return confirm_without("/dev/raw-gadget (not writable)", "the USB proxy");
+  }
   if (!path_exists("/sys/class/udc/dummy_udc.0")) {
     return confirm_without("dummy_udc.0", "the USB proxy");
   }
   return true;
 }
 
-static void *proxy_main(void *arg) {
-  Proxy *proxy = arg;
-
-  thread_ctx_init(THREAD_ROLE_WORKER, proxy->name);
-  LOG("thread started; emulated transport is not implemented yet\n");
-
-  pthread_mutex_lock(&proxy_lock);
-  while (!proxy_stop) pthread_cond_wait(&proxy_cond, &proxy_lock);
-  pthread_mutex_unlock(&proxy_lock);
-  return NULL;
-}
-
-static void proxy_start(Proxy *proxy) {
-  if (pthread_create(&proxy->thread, NULL, proxy_main, proxy) != 0) {
-    LOG_ERR("Failed to start %s\n", proxy->name);
-    return;
-  }
-
-  (void)pthread_setname_np(proxy->thread, proxy->name);
-  proxy->started = true;
-  LOG("%s started\n", proxy->name);
-}
-
 void H1B3C_StartProxies(bool disable_tpm, bool disable_usb) {
   if (geteuid() != 0) return;
 
-  proxy_stop = false;
+  if (!disable_tpm && tpm_proxy_requirements()) {
+    if (TPM_ProxyStart()) {
+      tpm_proxy_started = true;
+      LOG("vtpm-proxy started\n");
+    } else {
+      LOG_ERR("Failed to start vtpm-proxy\n");
+    }
+  }
 
-  if (!disable_tpm && tpm_proxy_requirements()) proxy_start(&tpm_proxy);
-  if (!disable_usb && usb_proxy_requirements()) proxy_start(&usb_proxy);
+  if (!disable_usb && usb_proxy_requirements()) {
+    if (USB_ProxyStart()) {
+      usb_proxy_started = true;
+      GPIO_SetInputOverride(0, 5, false);
+      LOG("usb-proxy started\n");
+    } else {
+      LOG_ERR("Failed to start usb-proxy\n");
+    }
+  }
 }
 
 void H1B3C_StopProxies(void) {
-  pthread_mutex_lock(&proxy_lock);
-  proxy_stop = true;
-  pthread_cond_broadcast(&proxy_cond);
-  pthread_mutex_unlock(&proxy_lock);
-
-  if (tpm_proxy.started) {
-    pthread_join(tpm_proxy.thread, NULL);
-    tpm_proxy.started = false;
+  if (tpm_proxy_started) {
+    TPM_ProxyStop();
+    tpm_proxy_started = false;
   }
 
-  if (usb_proxy.started) {
-    pthread_join(usb_proxy.thread, NULL);
-    usb_proxy.started = false;
+  if (usb_proxy_started) {
+    USB_ProxyStop();
+    usb_proxy_started = false;
   }
 }
 

@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
 
   if (wait_for_enter) {
     LOG("Waiting for ENTER to start emulation...\n");
+    fflush(stdout);
     (void)console_wait_enter(NULL);
   }
 

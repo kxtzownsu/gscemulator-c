@@ -23,6 +23,7 @@
 #define REG_GPIO_MASK_COUNT 256
 
 Component *GPIO_Initialize(unsigned bank);
+void GPIO_SetInputOverride(unsigned bank, unsigned pin, bool level);
 void GPIO_Poll(void);
 void GPIO_Refresh(void);
 

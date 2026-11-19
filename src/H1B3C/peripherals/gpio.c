@@ -25,6 +25,8 @@ typedef struct {
   uint32_t intstat;
   uint32_t reserved0;
   uint32_t reserved1;
+  uint32_t override_mask;
+  uint32_t override_levels;
 } GpioState;
 
 static GpioState gpio_states[2];
@@ -44,7 +46,9 @@ static uint32_t gpio_sample_levels(const GpioState *state) {
   for (pin = 0; pin < 16; pin++) {
     bool level;
 
-    if ((state->douten & (1u << pin)) != 0) {
+    if ((state->override_mask & (1u << pin)) != 0) {
+      level = (state->override_levels & (1u << pin)) != 0;
+    } else if ((state->douten & (1u << pin)) != 0) {
       level = (state->dataout & (1u << pin)) != 0;
     } else {
       level = PINMUX_PadLevel(PINMUX_GetGpioPad(state->bank, pin)) != 0;
@@ -110,9 +114,26 @@ static void gpio_refresh_interrupts(unsigned bank) {
     if ((state->inten & bit) == 0) continue;
     if ((state->intstat & bit) != 0) continue;
 
-    fire = edge ? (high && active) : (high == active);
+    fire = edge ? false : (high == active);
     if (fire) gpio_pend_pin(state, pin);
   }
+}
+
+void GPIO_SetInputOverride(unsigned bank, unsigned pin, bool level) {
+  GpioState *state;
+
+  if (bank > 1 || pin > 15) return;
+
+  state = &gpio_states[bank];
+  state->override_mask |= 1u << pin;
+
+  if (level) {
+    state->override_levels |= 1u << pin;
+  } else {
+    state->override_levels &= ~(1u << pin);
+  }
+
+  state->levels = gpio_sample_levels(state);
 }
 
 void GPIO_Refresh(void) {
@@ -150,7 +171,9 @@ static uint64_t GPIO_Read(Component *self, uint64_t offset, unsigned size) {
       for (pin = 0; pin < 16; pin++) {
         bool level;
 
-        if ((state->douten & (1u << pin)) != 0) {
+        if ((state->override_mask & (1u << pin)) != 0) {
+          level = (state->override_levels & (1u << pin)) != 0;
+        } else if ((state->douten & (1u << pin)) != 0) {
           level = (state->dataout & (1u << pin)) != 0;
         } else {
           level = PINMUX_PadLevel(PINMUX_GetGpioPad(state->bank, pin)) != 0;
