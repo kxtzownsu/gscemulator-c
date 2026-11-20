@@ -11,6 +11,7 @@
 
 #include <common/logger.h>
 #include <common/peripherals/define.h>
+#include <common/runtime/control.h>
 
 #define M3_CPUID_VALUE 0x410FC331
 /* PCLK_FREQ is 24 MHz on H1B3C (chip/haven/config_chip.h). */
@@ -38,8 +39,24 @@ DEFINE_BASIC_REGISTER(dfsr)
 DEFINE_BASIC_REGISTER(mmfar)
 DEFINE_BASIC_REGISTER(bfar)
 DEFINE_BASIC_REGISTER(nvic_stir)
+DEFINE_BASIC_REGISTER(scr)
+DEFINE_BASIC_REGISTER(afsr)
+DEFINE_BASIC_REGISTER(mpu_ctrl)
+DEFINE_BASIC_REGISTER(mpu_rnr)
+DEFINE_BASIC_REGISTER(mpu_rbar)
+DEFINE_BASIC_REGISTER(mpu_rasr)
+DEFINE_BASIC_REGISTER(mpu_rbar_a1)
+DEFINE_BASIC_REGISTER(mpu_rasr_a1)
+DEFINE_BASIC_REGISTER(mpu_rbar_a2)
+DEFINE_BASIC_REGISTER(mpu_rasr_a2)
+DEFINE_BASIC_REGISTER(mpu_rbar_a3)
+DEFINE_BASIC_REGISTER(mpu_rasr_a3)
+DEFINE_BASIC_REGISTER(dhcsr)
+DEFINE_BASIC_REGISTER(dcrsr)
+DEFINE_BASIC_REGISTER(dcrdr)
 
 static uint32_t itcmcr;
+static uint32_t icsr;
 static uint32_t m3_debug_regs[REG_M3_DEBUG_BLOCK_LIMIT / 4];
 static uint32_t nvic_en[REG_M3_NVIC_ISER_COUNT];
 static _Atomic uint32_t nvic_pend[REG_M3_NVIC_ISPR_COUNT];
@@ -69,6 +86,21 @@ static const BasicRegister m3_registers[] = {
   BASIC_REGISTER_ENTRY(REG_M3_MMFAR_OFFSET, mmfar),
   BASIC_REGISTER_ENTRY(REG_M3_BFAR_OFFSET, bfar),
   BASIC_REGISTER_ENTRY(REG_M3_NVIC_STIR_OFFSET, nvic_stir),
+  BASIC_REGISTER_ENTRY(REG_M3_SCR_OFFSET, scr),
+  BASIC_REGISTER_ENTRY(REG_M3_AFSR_OFFSET, afsr),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_CTRL_OFFSET, mpu_ctrl),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RNR_OFFSET, mpu_rnr),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RBAR_OFFSET, mpu_rbar),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RASR_OFFSET, mpu_rasr),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RBAR_A1_OFFSET, mpu_rbar_a1),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RASR_A1_OFFSET, mpu_rasr_a1),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RBAR_A2_OFFSET, mpu_rbar_a2),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RASR_A2_OFFSET, mpu_rasr_a2),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RBAR_A3_OFFSET, mpu_rbar_a3),
+  BASIC_REGISTER_ENTRY(REG_M3_MPU_RASR_A3_OFFSET, mpu_rasr_a3),
+  BASIC_REGISTER_ENTRY(REG_M3_DHCSR_OFFSET, dhcsr),
+  BASIC_REGISTER_ENTRY(REG_M3_DCRSR_OFFSET, dcrsr),
+  BASIC_REGISTER_ENTRY(REG_M3_DCRDR_OFFSET, dcrdr),
 };
 
 static int m3_index(uint64_t offset, uint32_t base, unsigned count) {
@@ -319,6 +351,12 @@ static uint64_t M3_Read(Component *self, uint64_t offset, unsigned size) {
     case REG_M3_SYST_CALIB_OFFSET:
       LOG_VBS("M3: read SYST_CALIB (size=%u) -> 0x%08x\n", size, M3_SYST_TENMS);
       return M3_SYST_TENMS;
+    case REG_M3_ICSR_OFFSET:
+      return icsr;
+    case REG_M3_AIRCR_OFFSET:
+      return 0xFA050000u;
+    case REG_M3_MPU_TYPE_OFFSET:
+      return 0x800;
     default:
       break;
   }
@@ -367,6 +405,22 @@ static void M3_Write(Component *self, uint64_t offset, unsigned size, uint64_t v
     case REG_M3_ITCMCR_OFFSET:
       /* Hardware always reads back 7 after a write. */
       itcmcr = 7;
+  icsr = 0;
+  scr = 0;
+  afsr = 0;
+  mpu_ctrl = 0;
+  mpu_rnr = 0;
+  mpu_rbar = 0;
+  mpu_rasr = 0;
+  mpu_rbar_a1 = 0;
+  mpu_rasr_a1 = 0;
+  mpu_rbar_a2 = 0;
+  mpu_rasr_a2 = 0;
+  mpu_rbar_a3 = 0;
+  mpu_rasr_a3 = 0;
+  dhcsr = 0;
+  dcrsr = 0;
+  dcrdr = 0;
   memset(m3_debug_regs, 0, sizeof(m3_debug_regs));
       LOG_VBS("M3: wrote ITCMCR (size=%u) <- 0x%08x\n", size, (uint32_t)value);
       return;
@@ -404,6 +458,17 @@ static void M3_Write(Component *self, uint64_t offset, unsigned size, uint64_t v
       return;
     case REG_M3_SYST_CALIB_OFFSET:
       LOG_VBS("M3: ignored write to SYST_CALIB\n");
+      return;
+    case REG_M3_ICSR_OFFSET:
+      icsr &= ~(uint32_t)value;
+      return;
+    case REG_M3_AIRCR_OFFSET:
+      if ((((uint32_t)value >> 16) & 0xFFFFu) == 0x05FAu && ((uint32_t)value & 4u) != 0) {
+        LOG("M3: system reset requested\n");
+        runtime_request_reboot();
+      }
+      return;
+    case REG_M3_MPU_TYPE_OFFSET:
       return;
     default:
       break;
