@@ -216,6 +216,21 @@ static uint64_t GPIO_Read(Component *self, uint64_t offset, unsigned size) {
       break;
   }
 
+  if (offset >= REG_GPIO_ARMPID4_OFFSET && offset <= REG_GPIO_ARMCID3_OFFSET) {
+    switch (offset) {
+      case REG_GPIO_ARMCID0_OFFSET:
+        return 0x0D;
+      case REG_GPIO_ARMCID1_OFFSET:
+        return 0xF0;
+      case REG_GPIO_ARMCID2_OFFSET:
+        return 0x05;
+      case REG_GPIO_ARMCID3_OFFSET:
+        return 0xB1;
+      default:
+        return 0;
+    }
+  }
+
   index = mask_index(offset, REG_GPIO_MASKLOWBYTE_OFFSET);
   if (index >= 0) {
     LOG_VBS("GPIO: read MASKLOWBYTE%d (size=%u) -> 0x%04x\n", index, size,
@@ -304,6 +319,8 @@ static void GPIO_Write(Component *self, uint64_t offset, unsigned size, uint64_t
     default:
       break;
   }
+
+  if (offset >= REG_GPIO_ARMPID4_OFFSET && offset <= REG_GPIO_ARMCID3_OFFSET) return;
 
   index = mask_index(offset, REG_GPIO_MASKLOWBYTE_OFFSET);
   if (index >= 0) {
