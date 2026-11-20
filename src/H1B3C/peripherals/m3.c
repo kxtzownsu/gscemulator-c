@@ -40,7 +40,7 @@ DEFINE_BASIC_REGISTER(bfar)
 DEFINE_BASIC_REGISTER(nvic_stir)
 
 static uint32_t itcmcr;
-static uint32_t m3_debug_regs[REG_M3_DEBUG_BLOCK_END_OFFSET / 4];
+static uint32_t m3_debug_regs[REG_M3_DEBUG_BLOCK_LIMIT / 4];
 static uint32_t nvic_en[REG_M3_NVIC_ISER_COUNT];
 static _Atomic uint32_t nvic_pend[REG_M3_NVIC_ISPR_COUNT];
 static uint32_t nvic_ipr[REG_M3_NVIC_IPR_COUNT];
@@ -350,7 +350,7 @@ static uint64_t M3_Read(Component *self, uint64_t offset, unsigned size) {
     return nvic_ipr[index];
   }
 
-  if (offset < REG_M3_DEBUG_BLOCK_END_OFFSET) return m3_debug_regs[offset / 4u];
+  if (offset < REG_M3_DEBUG_BLOCK_LIMIT) return m3_debug_regs[offset / 4u];
 
   component_log_unhandled(self, "read", offset);
   return 0;
@@ -466,7 +466,7 @@ static void M3_Write(Component *self, uint64_t offset, unsigned size, uint64_t v
     return;
   }
 
-  if (offset < REG_M3_DEBUG_BLOCK_END_OFFSET) {
+  if (offset < REG_M3_DEBUG_BLOCK_LIMIT) {
     m3_debug_regs[offset / 4u] = (uint32_t)value;
     return;
   }
