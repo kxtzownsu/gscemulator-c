@@ -1,6 +1,5 @@
 build/
 flash/
-*.bin
 include/common/bundled-firmware.h
 include/common/version.h
 reference/

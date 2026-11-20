@@ -820,6 +820,11 @@ static bool usb_enqueue_host_event(UsbHostEvent *event) {
 
   usb_host_tail = event;
   pthread_mutex_unlock(&usb_host_lock);
+
+#ifdef UNICORN_SAFE_HOOKS
+  if (ctx.uc != NULL) (void)uc_trigger_safe_hook(ctx.uc);
+#endif
+
   return true;
 }
 

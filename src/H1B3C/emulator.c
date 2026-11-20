@@ -201,7 +201,7 @@ static void m3_poll(uc_engine *uc) {
   GPIO_Poll();
   TIMEHS_Poll();
   RMA_Poll();
-  if ((++poll_count & 0x3Fu) == 0) component_poll_all();
+  if ((++poll_count & 1u) == 0) component_poll_all();
 
   if (!M3_IrqPending()) return;
 
@@ -460,6 +460,7 @@ void Havn_StartEmulation(void) {
     atomic_store(&m3_safe_running, false);
     if (memory_fault_occurred()) break;
     if (runtime_is_shutting_down()) break;
+    if (runtime_reboot_requested()) break;
     if (err != UC_ERR_OK && !escalate_unicorn_error(ctx.uc, err)) break;
 
     if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) break;
@@ -473,6 +474,7 @@ void Havn_StartEmulation(void) {
     err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, M3_SLICE_INSTRUCTIONS);
     if (memory_fault_occurred()) break;
     if (runtime_is_shutting_down()) break;
+    if (runtime_reboot_requested()) break;
 
     if (err == UC_ERR_OK) {
       m3_poll(ctx.uc);

@@ -303,9 +303,11 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
       return;
     case REG_PMU_GLOBAL_RESET_OFFSET:
       if ((uint32_t)value == PMU_GLOBAL_RESET_KEY) {
-        LOG("PMU: global reset requested\n");
-        pmu_next_reset_cause = 1u << 5;
-        runtime_request_reboot();
+        if (!runtime_reboot_requested()) {
+          LOG("PMU: global reset requested\n");
+          pmu_next_reset_cause = 1u << 5;
+          runtime_request_reboot();
+        }
       } else {
         LOG_VBS("PMU: ignored GLOBAL_RESET write 0x%08x\n", (uint32_t)value);
       }

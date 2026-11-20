@@ -27,7 +27,7 @@
 #define USB_PROXY_DRIVER "dummy_udc"
 #define USB_PROXY_MAX_ENDPOINTS 32
 #define USB_PROXY_MAX_XFER 4096
-#define USB_PROXY_CONTROL_TIMEOUT_MS 5000
+#define USB_PROXY_CONTROL_TIMEOUT_MS 1000
 
 #ifndef SINGLE_THREAD
 
@@ -619,44 +619,56 @@ static void usb_proxy_context_request(int fd, const uint8_t *setup, size_t setup
   proxy.control_abort = false;
   pthread_mutex_unlock(&proxy.control_lock);
 
-  USB_HostSetup(setup);
-
-  if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
-    deadline.tv_sec += USB_PROXY_CONTROL_TIMEOUT_MS / 1000;
-  } else {
-    deadline.tv_sec += USB_PROXY_CONTROL_TIMEOUT_MS / 1000;
-    deadline.tv_nsec += (long)(USB_PROXY_CONTROL_TIMEOUT_MS % 1000) * 1000000L;
-
-    if (deadline.tv_nsec >= 1000000000L) {
-      deadline.tv_sec += 1;
-      deadline.tv_nsec -= 1000000000L;
-    }
-  }
-
-  pthread_mutex_lock(&proxy.control_lock);
-
-  while (!proxy.control_ready) {
-    int result = pthread_cond_timedwait(&proxy.control_cond, &proxy.control_lock, &deadline);
-
-    if (proxy.control_abort) {
-      abort = true;
-      break;
+  for (unsigned attempt = 0; attempt < 2 && !ready && !abort; attempt++) {
+    if (attempt != 0) {
+      pthread_mutex_lock(&proxy.control_lock);
+      free(proxy.control_data);
+      proxy.control_data = NULL;
+      proxy.control_len = 0;
+      proxy.control_ready = false;
+      pthread_mutex_unlock(&proxy.control_lock);
     }
 
-    if (result == ETIMEDOUT) break;
-  }
+    USB_HostSetup(setup);
 
-  if (proxy.control_ready) {
-    ready = true;
-    kind = proxy.control_kind;
-    data = proxy.control_data;
-    len = proxy.control_len;
-    proxy.control_data = NULL;
-    proxy.control_len = 0;
-    proxy.control_ready = false;
-  }
+    if (clock_gettime(CLOCK_REALTIME, &deadline) != 0) {
+      deadline.tv_sec += USB_PROXY_CONTROL_TIMEOUT_MS / 1000;
+      deadline.tv_nsec = 0;
+    } else {
+      deadline.tv_sec += USB_PROXY_CONTROL_TIMEOUT_MS / 1000;
+      deadline.tv_nsec += (long)(USB_PROXY_CONTROL_TIMEOUT_MS % 1000) * 1000000L;
 
-  pthread_mutex_unlock(&proxy.control_lock);
+      if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec += 1;
+        deadline.tv_nsec -= 1000000000L;
+      }
+    }
+
+    pthread_mutex_lock(&proxy.control_lock);
+
+    while (!proxy.control_ready) {
+      int result = pthread_cond_timedwait(&proxy.control_cond, &proxy.control_lock, &deadline);
+
+      if (proxy.control_abort) {
+        abort = true;
+        break;
+      }
+
+      if (result == ETIMEDOUT) break;
+    }
+
+    if (proxy.control_ready) {
+      ready = true;
+      kind = proxy.control_kind;
+      data = proxy.control_data;
+      len = proxy.control_len;
+      proxy.control_data = NULL;
+      proxy.control_len = 0;
+      proxy.control_ready = false;
+    }
+
+    pthread_mutex_unlock(&proxy.control_lock);
+  }
 
   if (!ready) {
     LOG_ERR("USB proxy: control transfer timed out "
