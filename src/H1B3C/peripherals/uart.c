@@ -18,6 +18,13 @@ typedef struct {
   uint32_t fifo;
   uint32_t ctrl;
   uint32_t state;
+  uint32_t istate;
+  uint32_t rfifo;
+  uint32_t ovrd;
+  uint32_t val;
+  uint32_t rxto;
+  uint32_t itcr;
+  uint32_t itop;
   uint32_t rdata;
   uint8_t rx_byte;
   bool rx_buffered;
@@ -157,6 +164,20 @@ static uint64_t UART_Read(Component *self, uint64_t offset, unsigned size) {
     case REG_UART_FIFO_OFFSET:
       LOG_VBS("%s: read FIFO (size=%u) -> 0x%08x\n", self->name, size, uart->fifo);
       return uart->fifo;
+    case REG_UART_ISTATE_OFFSET:
+      return uart->istate;
+    case REG_UART_RFIFO_OFFSET:
+      return uart->rfifo;
+    case REG_UART_OVRD_OFFSET:
+      return uart->ovrd;
+    case REG_UART_VAL_OFFSET:
+      return uart->val;
+    case REG_UART_RXTO_OFFSET:
+      return uart->rxto;
+    case REG_UART_ITCR_OFFSET:
+      return uart->itcr;
+    case REG_UART_ITOP_OFFSET:
+      return uart->itop;
     default:
       component_log_unhandled(self, "read", offset);
       return 0;
@@ -198,6 +219,30 @@ static void UART_Write(Component *self, uint64_t offset, unsigned size, uint64_t
     case REG_UART_FIFO_OFFSET:
       uart->fifo = (uint32_t)value;
       LOG_VBS("%s: wrote FIFO (size=%u) <- 0x%08x\n", self->name, size, uart->fifo);
+      return;
+    case REG_UART_STATECLR_OFFSET:
+      uart->state &= ~(uint32_t)value;
+      return;
+    case REG_UART_ISTATE_OFFSET:
+      uart->istate &= ~(uint32_t)value;
+      return;
+    case REG_UART_RFIFO_OFFSET:
+      uart->rfifo = (uint32_t)value;
+      return;
+    case REG_UART_OVRD_OFFSET:
+      uart->ovrd = (uint32_t)value;
+      return;
+    case REG_UART_VAL_OFFSET:
+      uart->val = (uint32_t)value;
+      return;
+    case REG_UART_RXTO_OFFSET:
+      uart->rxto = (uint32_t)value;
+      return;
+    case REG_UART_ITCR_OFFSET:
+      uart->itcr = (uint32_t)value;
+      return;
+    case REG_UART_ITOP_OFFSET:
+      uart->itop = (uint32_t)value;
       return;
     default:
       component_log_unhandled(self, "write", offset);

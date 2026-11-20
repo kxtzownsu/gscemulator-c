@@ -45,7 +45,21 @@ static void SPI_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
   const BasicRegister *reg = basic_register_find(spi_registers, ARRAY_LEN(spi_registers), offset);
 
   if (reg != NULL) {
+    if (offset == REG_SPI_ISTATE_CLR_OFFSET) {
+      istate &= ~(uint32_t)value;
+      return;
+    }
+
     *reg->value = (uint32_t)value;
+
+    if (offset == REG_SPI_XACT_OFFSET && ((uint32_t)value & 1u) != 0) {
+      uint32_t count = (((uint32_t)value >> 4) & 0x7Fu) + 1u;
+
+      rx_data = tx_data;
+      (void)count;
+      istate |= 1u;
+    }
+
     LOG_VBS("SPI: wrote %s (size=%u) <- 0x%08x\n", reg->name, size, *reg->value);
     return;
   }
@@ -54,8 +68,8 @@ static void SPI_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
 }
 
 Component *SPI_Initialize(void) {
-  ctrl = 0;
-  xact = 0;
+  ctrl = 0x02800800;
+  xact = 0xE;
   ictrl = 0;
   istate = 0;
   istate_clr = 0;

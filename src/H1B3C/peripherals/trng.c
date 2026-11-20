@@ -22,6 +22,21 @@ DEFINE_BASIC_REGISTER(ldo_ctrl)
 DEFINE_BASIC_REGISTER(power_down_b)
 DEFINE_BASIC_REGISTER(analog_ctrl)
 DEFINE_BASIC_REGISTER(empty)
+DEFINE_BASIC_REGISTER(int_enable)
+DEFINE_BASIC_REGISTER(int_state)
+DEFINE_BASIC_REGISTER(int_test)
+DEFINE_BASIC_REGISTER(timer_counter)
+DEFINE_BASIC_REGISTER(max_value)
+DEFINE_BASIC_REGISTER(min_value)
+DEFINE_BASIC_REGISTER(proc_lock_power_down_b)
+DEFINE_BASIC_REGISTER(antest)
+DEFINE_BASIC_REGISTER(analog_sen_lsr_input)
+DEFINE_BASIC_REGISTER(analog_sen_lsr_output)
+DEFINE_BASIC_REGISTER(analog_test)
+DEFINE_BASIC_REGISTER(one_shot_mode)
+DEFINE_BASIC_REGISTER(one_shot_reg)
+DEFINE_BASIC_REGISTER(frequency_calls)
+DEFINE_BASIC_REGISTER(cur_num_ones)
 
 static const BasicRegister trng_registers[] = {
   BASIC_REGISTER_ENTRY(REG_TRNG_SECURE_POST_PROCESSING_CTRL_OFFSET, secure_post_processing_ctrl),
@@ -39,6 +54,21 @@ static const BasicRegister trng_registers[] = {
   BASIC_REGISTER_ENTRY(REG_TRNG_POWER_DOWN_B_OFFSET, power_down_b),
   BASIC_REGISTER_ENTRY(REG_TRNG_ANALOG_CTRL_OFFSET, analog_ctrl),
   BASIC_REGISTER_ENTRY(REG_TRNG_EMPTY_OFFSET, empty),
+  BASIC_REGISTER_ENTRY(REG_TRNG_INT_ENABLE_OFFSET, int_enable),
+  BASIC_REGISTER_ENTRY(REG_TRNG_INT_STATE_OFFSET, int_state),
+  BASIC_REGISTER_ENTRY(REG_TRNG_INT_TEST_OFFSET, int_test),
+  BASIC_REGISTER_ENTRY(REG_TRNG_TIMER_COUNTER_OFFSET, timer_counter),
+  BASIC_REGISTER_ENTRY(REG_TRNG_MAX_VALUE_OFFSET, max_value),
+  BASIC_REGISTER_ENTRY(REG_TRNG_MIN_VALUE_OFFSET, min_value),
+  BASIC_REGISTER_ENTRY(REG_TRNG_PROC_LOCK_POWER_DOWN_B_OFFSET, proc_lock_power_down_b),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ANTEST_OFFSET, antest),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ANALOG_SEN_LSR_INPUT_OFFSET, analog_sen_lsr_input),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ANALOG_SEN_LSR_OUTPUT_OFFSET, analog_sen_lsr_output),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ANALOG_TEST_OFFSET, analog_test),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ONE_SHOT_MODE_OFFSET, one_shot_mode),
+  BASIC_REGISTER_ENTRY(REG_TRNG_ONE_SHOT_REG_OFFSET, one_shot_reg),
+  BASIC_REGISTER_ENTRY(REG_TRNG_FREQUENCY_CALLS_OFFSET, frequency_calls),
+  BASIC_REGISTER_ENTRY(REG_TRNG_CUR_NUM_ONES_OFFSET, cur_num_ones),
 };
 
 static uint32_t trng_random(void) {
@@ -55,6 +85,8 @@ static uint32_t trng_random(void) {
 
 static uint64_t TRNG_Read(Component *self, uint64_t offset, unsigned size) {
   const BasicRegister *reg = basic_register_find(trng_registers, ARRAY_LEN(trng_registers), offset);
+
+  if (offset == REG_TRNG_VERSION_OFFSET) return 0x1014125;
 
   if (offset == REG_TRNG_READ_DATA_OFFSET) {
     uint32_t value = trng_random();
@@ -75,8 +107,13 @@ static uint64_t TRNG_Read(Component *self, uint64_t offset, unsigned size) {
 static void TRNG_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
   const BasicRegister *reg = basic_register_find(trng_registers, ARRAY_LEN(trng_registers), offset);
 
-  if (offset == REG_TRNG_READ_DATA_OFFSET) {
-    LOG_VBS("TRNG: ignored write to READ_DATA\n");
+  if (offset == REG_TRNG_VERSION_OFFSET || offset == REG_TRNG_READ_DATA_OFFSET) {
+    LOG_VBS("TRNG: ignored write to read-only register\n");
+    return;
+  }
+
+  if (offset == REG_TRNG_INT_STATE_OFFSET) {
+    int_state &= ~(uint32_t)value;
     return;
   }
 
@@ -105,6 +142,21 @@ Component *TRNG_Initialize(void) {
   power_down_b = 0;
   analog_ctrl = 0;
   empty = 0;
+  int_enable = 0;
+  int_state = 0;
+  int_test = 0;
+  timer_counter = 0;
+  max_value = 0;
+  min_value = 0;
+  proc_lock_power_down_b = 0;
+  antest = 0;
+  analog_sen_lsr_input = 0;
+  analog_sen_lsr_output = 0;
+  analog_test = 0;
+  one_shot_mode = 0;
+  one_shot_reg = 0;
+  frequency_calls = 0;
+  cur_num_ones = 0;
 
   return component_register_threaded("TRNG", NULL, TRNG_Read, TRNG_Write);
 }

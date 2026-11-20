@@ -37,13 +37,19 @@ static void XO_Write(Component *self, uint64_t offset, unsigned size, uint64_t v
     return;
   }
 
-  xo_regs[index] = (uint32_t)value;
+  if (offset == REG_XO_DXO_INT_STATE_OFFSET) {
+    xo_regs[index] &= ~(uint32_t)value;
+  } else {
+    xo_regs[index] = (uint32_t)value;
+  }
+
   LOG_VBS("XO: wrote 0x%03llx (size=%u) <- 0x%08x\n", (unsigned long long)offset, size,
           xo_regs[index]);
 }
 
 Component *XO_Initialize(void) {
   memset(xo_regs, 0, sizeof(xo_regs));
+  xo_regs[REG_XO_VERSION_OFFSET / 4] = 0x101424A;
 
   return component_register("XO", NULL, XO_Read, XO_Write);
 }

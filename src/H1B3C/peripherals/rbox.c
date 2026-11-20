@@ -55,6 +55,7 @@ static void RBOX_Write(Component *self, uint64_t offset, unsigned size, uint64_t
 
 Component *RBOX_Initialize(void) {
   memset(rbox_regs, 0, sizeof(rbox_regs));
+  rbox_regs[REG_RBOX_VERSION_OFFSET / 4] = 0x1014125;
 
   return component_register("RBOX", NULL, RBOX_Read, RBOX_Write);
 }
