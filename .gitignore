@@ -7,4 +7,4 @@ reference/
 tools/rescue/rescue
 tools/spiflash/spiflash
 
-third_party/unicorn
+third_party/unicorn__pycache__/
