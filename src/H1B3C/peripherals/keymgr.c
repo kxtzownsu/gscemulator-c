@@ -8,6 +8,7 @@
 #include <common/aes.h>
 #include <common/logger.h>
 #include <common/peripherals/define.h>
+#include <common/sha1.h>
 #include <common/sha256.h>
 
 #define KEYMGR_AES_CTRL_RESET (1u << 0)
@@ -102,6 +103,7 @@ static uint32_t sha_use_cert;
 static uint32_t sha_cert_override;
 static uint32_t sha_rand_stall_ctl;
 static Sha256Context sha_context;
+static Sha1Context sha1_context;
 static uint64_t sha_input_len;
 
 static uint32_t aes_ctrl;
@@ -170,13 +172,34 @@ static void sha_hmac_key_block(uint8_t block[KEYMGR_SHA_BLOCK_SIZE], uint8_t pad
 
 static void sha_hash(void) {
   uint8_t digest[32];
+  unsigned digest_len;
   unsigned i;
 
-  if ((sha_en & (KEYMGR_SHA_EN_HMAC | KEYMGR_SHA_EN_SHA1)) == KEYMGR_SHA_EN_HMAC) {
+  memset(digest, 0, sizeof(digest));
+
+  if ((sha_en & KEYMGR_SHA_EN_SHA1) != 0) {
+    digest_len = 20;
+
+    if ((sha_en & KEYMGR_SHA_EN_HMAC) != 0) {
+      uint8_t inner[20];
+      uint8_t block[KEYMGR_SHA_BLOCK_SIZE];
+      Sha1Context outer;
+
+      sha1_final(&sha1_context, inner);
+      sha1_init(&outer);
+      sha_hmac_key_block(block, 0x5C);
+      sha1_update(&outer, block, sizeof(block));
+      sha1_update(&outer, inner, sizeof(inner));
+      sha1_final(&outer, digest);
+    } else {
+      sha1_final(&sha1_context, digest);
+    }
+  } else if ((sha_en & KEYMGR_SHA_EN_HMAC) != 0) {
     uint8_t inner[32];
     uint8_t block[KEYMGR_SHA_BLOCK_SIZE];
     Sha256Context outer;
 
+    digest_len = 32;
     sha256_final(&sha_context, inner);
     sha256_init(&outer);
     sha_hmac_key_block(block, 0x5C);
@@ -184,10 +207,12 @@ static void sha_hash(void) {
     sha256_update(&outer, inner, sizeof(inner));
     sha256_final(&outer, digest);
   } else {
+    digest_len = 32;
     sha256_final(&sha_context, digest);
   }
 
-  for (i = 0; i < REG_KEYMGR_SHA_STS_H_COUNT; i++) {
+  memset(sha_sts_h, 0, sizeof(sha_sts_h));
+  for (i = 0; i < digest_len / 4u; i++) {
     sha_sts_h[i] = (uint32_t)digest[4 * i] | ((uint32_t)digest[4 * i + 1] << 8) |
                    ((uint32_t)digest[4 * i + 2] << 16) |
                    ((uint32_t)digest[4 * i + 3] << 24);
@@ -219,7 +244,11 @@ static void sha_input_write(uint64_t value, unsigned size) {
 
   if (count == 0) return;
 
-  sha256_update(&sha_context, bytes, count);
+  if ((sha_en & KEYMGR_SHA_EN_SHA1) != 0) {
+    sha1_update(&sha1_context, bytes, count);
+  } else {
+    sha256_update(&sha_context, bytes, count);
+  }
   sha_input_len += count;
 
   if (oneshot && sha_msglen != 0 && sha_input_len >= sha_msglen) sha_hash();
@@ -338,6 +367,7 @@ static void keymgr_aes_cipher_block(const uint8_t in[AES_BLOCK_SIZE],
       }
       return;
     case KEYMGR_AES_MODE_CTR:
+    case KEYMGR_AES_MODE_GCM:
       for (i = 0; i < 4; i++) keymgr_aes_put_word(&iv[i * 4u], aes_ctr[i]);
       aes_encrypt_block(&aes_context, iv, buffer);
       for (i = 0; i < AES_BLOCK_SIZE; i++) out[i] = in[i] ^ buffer[i];
@@ -367,7 +397,6 @@ static void keymgr_aes_process(void) {
 
   if ((aes_ctrl & KEYMGR_AES_CTRL_ENABLE) == 0) return;
   if (!aes_key_ready) return;
-  if (KEYMGR_AES_MODE(aes_ctrl) == KEYMGR_AES_MODE_GCM) return;
 
   while (aes_wfifo_count >= 4u) {
     unsigned i;
@@ -853,14 +882,19 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
         }
 
         sha256_init(&sha_context);
+        sha1_init(&sha1_context);
         sha_input_len = 0;
         sha_itop = 0;
         sha_receiving = true;
-        if ((sha_en & (KEYMGR_SHA_EN_HMAC | KEYMGR_SHA_EN_SHA1)) == KEYMGR_SHA_EN_HMAC) {
+        if ((sha_en & KEYMGR_SHA_EN_HMAC) != 0) {
           uint8_t block[KEYMGR_SHA_BLOCK_SIZE];
 
           sha_hmac_key_block(block, 0x36);
-          sha256_update(&sha_context, block, sizeof(block));
+          if ((sha_en & KEYMGR_SHA_EN_SHA1) != 0) {
+            sha1_update(&sha1_context, block, sizeof(block));
+          } else {
+            sha256_update(&sha_context, block, sizeof(block));
+          }
         }
       } else if (((uint32_t)value & KEYMGR_SHA_TRIG_RESET) != 0) {
         sha_receiving = false;

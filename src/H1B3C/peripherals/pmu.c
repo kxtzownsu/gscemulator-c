@@ -37,6 +37,10 @@ static uint32_t pmu_int_state;
 static uint32_t pmu_int_test;
 static uint32_t antest_top_ctrl;
 static uint32_t antest_regdig;
+static uint32_t wic;
+static uint32_t sysvtor = 0xFFFFFFFFu;
+static uint32_t nap_en;
+static uint32_t pmu_next_reset_cause = 1u;
 
 static int pwrdn_scratch_index(uint64_t offset) {
   uint64_t end = (uint64_t)REG_PMU_PWRDN_SCRATCH_OFFSET +
@@ -189,6 +193,24 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
       break;
   }
 
+  switch (offset) {
+    case REG_PMU_RESET_OFFSET:
+      return 0x3;
+    case REG_PMU_SETRST_OFFSET:
+      return 0;
+    case REG_PMU_RSTSRC_OFFSET:
+      return rstsrc;
+    case REG_PMU_SETWIC_OFFSET:
+    case REG_PMU_CLRWIC_OFFSET:
+      return wic;
+    case REG_PMU_SYSVTOR_OFFSET:
+      return sysvtor;
+    case REG_PMU_NAP_EN_OFFSET:
+      return nap_en;
+    default:
+      break;
+  }
+
   if (offset < (uint64_t)REG_PMU_LOW_BLOCK_COUNT * 4u) return pmu_flat[offset / 4u];
   if (offset == REG_PMU_INT_STATE_OFFSET) return pmu_int_state;
   if (offset == REG_PMU_INT_TEST_OFFSET) return pmu_int_test;
@@ -282,6 +304,7 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
     case REG_PMU_GLOBAL_RESET_OFFSET:
       if ((uint32_t)value == PMU_GLOBAL_RESET_KEY) {
         LOG("PMU: global reset requested\n");
+        pmu_next_reset_cause = 1u << 5;
         runtime_request_reboot();
       } else {
         LOG_VBS("PMU: ignored GLOBAL_RESET write 0x%08x\n", (uint32_t)value);
@@ -309,6 +332,29 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
     case REG_PMU_PERICLKCLR1_OFFSET:
       pmu_periclk_apply(32, 16, (uint32_t)value, false);
       LOG_VBS("PMU: wrote PERICLKCLR1 (size=%u) <- 0x%08x\n", size, (uint32_t)value);
+      return;
+    default:
+      break;
+  }
+
+  switch (offset) {
+    case REG_PMU_RESET_OFFSET:
+    case REG_PMU_RSTSRC_OFFSET:
+      return;
+    case REG_PMU_SETRST_OFFSET:
+      if (((uint32_t)value & 1u) != 0) rstsrc |= 1u << 5;
+      return;
+    case REG_PMU_SETWIC_OFFSET:
+      wic |= (uint32_t)value;
+      return;
+    case REG_PMU_CLRWIC_OFFSET:
+      wic &= ~(uint32_t)value;
+      return;
+    case REG_PMU_SYSVTOR_OFFSET:
+      sysvtor = (uint32_t)value;
+      return;
+    case REG_PMU_NAP_EN_OFFSET:
+      nap_en = (uint32_t)value;
       return;
     default:
       break;
@@ -353,7 +399,11 @@ Component *PMU_Initialize(void) {
   low_power_dis = 0;
   exitpd_mask = 0;
   int_enable = false;
-  rstsrc = 0;
+  rstsrc = pmu_next_reset_cause;
+  pmu_next_reset_cause = 0;
+  wic = 0;
+  sysvtor = 0xFFFFFFFFu;
+  nap_en = 0;
   memset(pmu_flat, 0, sizeof(pmu_flat));
   pmu_int_state = 0;
   pmu_int_test = 0;
