@@ -15,6 +15,7 @@ part of the emulator binary and do not use unicorn.
 - Packets are 1024 bytes: 32-byte hash, 32-bit frame, 32-bit flash offset, 984 bytes of data.
 - The packet hash covers bytes 32..1023. The expected response is the SHA-256 of the whole 1024-byte packet with zero bytes replaced by one.
 - `rescue` waits for `oops?|`, sends exactly one `r`, then sends two 1024-byte zero sync packets. Do not add extra `r` or sync bytes; that misaligns the guest receive buffer.
+- The prompt is only valid if the tool is attached while the BootROM is waiting. A `oops?|no` completion means rescue was declined, so fail instead of injecting a key.
 - Retries are bounded by `--retries`; never retry forever or dump per-packet data by default.
 - `spiflash` sends raw file bytes. It does not parse a signed header.
 - TTY I/O loops on partial reads and writes and treats `EAGAIN`/`EWOULDBLOCK` as retryable.

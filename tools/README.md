@@ -23,6 +23,11 @@ banner, syncs, and streams the packet stream. Every request is acknowledged
 with a SHA-256 digest; a packet is retried a bounded number of times before
 the transfer fails.
 
+The prompt only exists for a short window during boot, so start the tool as
+soon as the pty path is printed. If the guest finished the prompt with `no`,
+the tool exits without sending anything rather than injecting bytes into the
+firmware console.
+
 Options:
 
 - `--timeout SEC` - per-request timeout, default `10`.

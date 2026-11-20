@@ -112,7 +112,8 @@ int shaft_engage(int fd, unsigned timeout_ms, int verbose) {
   size_t received_len = 0;
   uint64_t start = shaft_now_ms();
   uint64_t deadline = start + timeout_ms;
-  bool armed = false;
+  uint64_t prompt_at = 0;
+  bool key_sent = false;
 
   memset(received, 0, sizeof(received));
 
@@ -147,20 +148,37 @@ int shaft_engage(int fd, unsigned timeout_ms, int verbose) {
       }
     }
 
-    if (!armed && strstr(received, "oops?|") != NULL) {
-      if (shaft_write_all(fd, (const uint8_t *)"r", 1, timeout_ms) != 0) return -1;
-      armed = true;
+    if (!key_sent) {
+      const char *marker = strstr(received, "oops?|");
+      bool incomplete = false;
+
+      if (marker != NULL) {
+        if (marker[6] == 'n' && marker[7] == 'o') {
+          fprintf(stderr, "%s: guest did not enter rescue\n", shaft_tool);
+          return -1;
+        }
+
+        incomplete = marker[6] == '\0' || (marker[6] == 'n' && marker[7] == '\0');
+
+        if (!incomplete) {
+          if (shaft_write_all(fd, (const uint8_t *)"r", 1, timeout_ms) != 0) return -1;
+          key_sent = true;
+        }
+      }
+
+      if (incomplete) {
+        if (prompt_at == 0) prompt_at = shaft_now_ms();
+        else if (shaft_now_ms() - prompt_at >= 250) {
+          if (shaft_write_all(fd, (const uint8_t *)"r", 1, timeout_ms) != 0) return -1;
+          key_sent = true;
+        }
+      }
     }
 
     if (strstr(received, "escue") != NULL) {
       if (verbose) putchar('\n');
       (void)tcflush(fd, TCOFLUSH);
       return 0;
-    }
-
-    if (!armed && shaft_now_ms() - start > 3000) {
-      if (shaft_write_all(fd, (const uint8_t *)"r", 1, timeout_ms) != 0) return -1;
-      armed = true;
     }
   }
 
