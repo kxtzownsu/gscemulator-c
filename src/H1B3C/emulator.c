@@ -378,6 +378,8 @@ void Havn_Initialize(void) {
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
 
+  endorsement_patch_ca(ctx.uc);
+
   set_sp_pc(ctx.uc, FLASH_ROM_BASE);
 
   initialize_peripherals();

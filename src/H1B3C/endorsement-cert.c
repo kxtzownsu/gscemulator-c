@@ -1,11 +1,57 @@
 #include <H1B3C/endorsement-cert.h>
 
+#include <H1B3C/memory.h>
+
+#include <common/logger.h>
+
+#include <stdlib.h>
+#include <string.h>
+#include <unicorn/unicorn.h>
+
 /* Certificate data matches gscemu-upstream/src/haven/endorsement_cert.py. */
 
 const uint8_t PROD_ENDORSEMENT_SEED[ENDORSEMENT_SEED_SIZE] = {
   0x85, 0xd7, 0xce, 0x18, 0xf9, 0xe0, 0x3c, 0xc9, 0x68, 0x37, 0xc6, 0xfa,
   0x53, 0x57, 0x70, 0x7e, 0xb1, 0x5e, 0xf8, 0x1a, 0xb6, 0x33, 0x80, 0x8d,
   0x48, 0xe3, 0xd4, 0xa1, 0xa8, 0x88, 0xfd, 0xd1,
+};
+
+const uint32_t TEST_ENDORSEMENT_CA_RSA_N[64] = {
+  0xfa3b34ed, 0x3c59ad05, 0x912d6623, 0x83302402,
+  0xd43b6755, 0x5777021a, 0xaf37e9a1, 0x45c0e8ad,
+  0x9728f946, 0x4391523d, 0xdf7a9164, 0x88f1a9ae,
+  0x036c557e, 0x5d9df43e, 0x3e65de68, 0xe172008a,
+  0x709dc81f, 0x27a75fe0, 0x3e77f89e, 0x4f400ecc,
+  0x51a17dae, 0x2ff9c652, 0xd1d83cdb, 0x20d26349,
+  0xbbad71dd, 0x30051b2b, 0x276b2459, 0x809bb8e1,
+  0xb8737049, 0xdbe94466, 0x8287072b, 0x070ef311,
+  0x6e2a26de, 0x29d69f11, 0x96463d95, 0xb4dc6950,
+  0x097d4dfe, 0x1b4a88cc, 0xbd6b50c8, 0x9f7a5b34,
+  0xda22c199, 0x9d1ac04b, 0x136af5e5, 0xb1a0e824,
+  0x4a065b34, 0x1f67fb46, 0xa1f91ab1, 0x27bb769f,
+  0xb704c992, 0xb669cbf4, 0x9299bb6c, 0xcb1b2208,
+  0x2dc0d9db, 0xe1513e13, 0xc7f24923, 0xa74c6bcc,
+  0xca1a9a69, 0x1b994244, 0x4f64b0d9, 0x78607fd6,
+  0x486fb315, 0xa1098c31, 0x5dc50dd6, 0xcdc10874,
+};
+
+const uint32_t PROD_ENDORSEMENT_CA_RSA_N[64] = {
+  0xeb6a07bf, 0x6cf8eca6, 0x4756e85e, 0x2fc3874c,
+  0xa4c23e87, 0xc364dffe, 0x2a2ddb95, 0x2f7f0e1e,
+  0xdb485bd8, 0xce8aa808, 0xe062001b, 0x187811c3,
+  0x0e400462, 0xb7097a01, 0xb988152b, 0xba9d058a,
+  0x814b6691, 0xc70a694f, 0x8108c7f0, 0x4c7a1f33,
+  0x5cfda48e, 0xef303dbc, 0x84f5a3ea, 0x14607435,
+  0xc72f1e60, 0x345d0b38, 0x0ac16927, 0xbdf903c7,
+  0x11b660ed, 0x21ebfe0e, 0x8c8b303c, 0xd6eff6cb,
+  0x76156bf7, 0x57735ce4, 0x8b7a87ed, 0x7a757188,
+  0xd4fb3eb0, 0xc67fa05d, 0x163f0cf5, 0x69d8abf3,
+  0xec105749, 0x1de78f37, 0xb885a62f, 0x81344a82,
+  0x390df2b7, 0x58a7c56a, 0xa938f471, 0x506ee7d4,
+  0x2ca0f2a3, 0x2aa5392c, 0x39052797, 0x199e837c,
+  0x0d367b81, 0xb7bbff6f, 0x0ea99f5f, 0xfbac0d2a,
+  0x7bbe018d, 0x265fc995, 0x34f73008, 0x5e2cd747,
+  0x42096e33, 0x0c15f816, 0xffa7f7d2, 0xbd6f0198,
 };
 
 const uint8_t PROD_RO_CERT_REGION[ENDORSEMENT_CERT_SIZE] = {
@@ -181,3 +227,48 @@ const uint8_t PROD_RO_CERT_REGION[ENDORSEMENT_CERT_SIZE] = {
   0xf7, 0xa8, 0x0b, 0x06, 0x58, 0x79, 0x30, 0xf1, 0x83, 0x26, 0x38, 0x3e,
   0x87, 0x98, 0xfd, 0x67, 0xfa, 0x12, 0xea, 0xa1,
 };
+
+void endorsement_patch_ca(uc_engine *uc) {
+  uint8_t *prog = malloc(FLASH_PROG_SIZE);
+  size_t offset = 0;
+  unsigned patched = 0;
+
+  if (prog == NULL) {
+    LOG_ERR("unable to allocate the firmware image for the CA patch\n");
+    return;
+  }
+
+  if (uc_mem_read(uc, FLASH_PROG_BASE, prog, FLASH_PROG_SIZE) != UC_ERR_OK) {
+    LOG_ERR("unable to read PROG for the CA patch\n");
+    free(prog);
+    return;
+  }
+
+  while (offset + sizeof(TEST_ENDORSEMENT_CA_RSA_N) <= FLASH_PROG_SIZE) {
+    uint8_t *hit = memchr(prog + offset, TEST_ENDORSEMENT_CA_RSA_N[0] & 0xFFu,
+                          FLASH_PROG_SIZE - offset - sizeof(TEST_ENDORSEMENT_CA_RSA_N) + 1);
+
+    if (hit == NULL) break;
+
+    offset = (size_t)(hit - prog);
+    if (memcmp(prog + offset, TEST_ENDORSEMENT_CA_RSA_N,
+               sizeof(TEST_ENDORSEMENT_CA_RSA_N)) == 0) {
+      memcpy(prog + offset, PROD_ENDORSEMENT_CA_RSA_N,
+             sizeof(PROD_ENDORSEMENT_CA_RSA_N));
+      patched++;
+      offset += sizeof(TEST_ENDORSEMENT_CA_RSA_N);
+    } else {
+      offset++;
+    }
+  }
+
+  if (patched != 0) {
+    if (uc_mem_write(uc, FLASH_PROG_BASE, prog, FLASH_PROG_SIZE) != UC_ERR_OK) {
+      LOG_ERR("unable to write the CA patch\n");
+    } else {
+      LOG_VBS("Patched %u test endorsement CA key(s)\n", patched);
+    }
+  }
+
+  free(prog);
+}

@@ -52,6 +52,15 @@ static void crypto_run_host_cmd(uint32_t value) {
     return;
   }
 
+  /* Old RW images load the computeRR mask from DMEM cell 6, but their
+     own context layout overwrites that cell with modulus data. Rewrite
+     the prologue to the newer zero-and-immediate sequence. */
+  if (entry == 0x343u && crypto_engine_get_imem(595) == 0x95800000u &&
+      crypto_engine_get_imem(596) == 0x840c20c0u) {
+    crypto_engine_set_imem(595, 0x4c0c6300u);
+    crypto_engine_set_imem(596, 0x800cffffu);
+  }
+
   crypto_engine_set_pc(entry);
   status = crypto_engine_run();
   if (status != CRYPTO_ENGINE_OK) {

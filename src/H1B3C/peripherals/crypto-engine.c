@@ -849,6 +849,13 @@ static CryptoEngineStatus execute(const uint32_t instruction, int *has_jump,
       }
       if (loop_depth == ENGINE_LOOP_STACK) return CRYPTO_ENGINE_ERR_LOOP_STACK_OVERFLOW;
 
+      /* A zero count means skip the body; the count-1 frame would wrap. */
+      if (count == 0) {
+        *has_jump = 1;
+        *jump_address = end_address + 1u;
+        return CRYPTO_ENGINE_OK;
+      }
+
       loop_stack[loop_depth].count = (int64_t)count - 1;
       loop_stack[loop_depth].end = end_address;
       loop_stack[loop_depth].start = start_address;
