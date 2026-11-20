@@ -77,6 +77,18 @@ static const BasicRegister keymgr_registers[] = {
 static uint32_t hkey_rwr[REG_KEYMGR_HKEY_RWR_COUNT];
 static uint32_t hkey_fwr[REG_KEYMGR_HKEY_FWR_COUNT];
 static uint32_t hkey_frr[REG_KEYMGR_HKEY_FRR_COUNT];
+static uint32_t tm_pw_attempt[REG_KEYMGR_TM_PW_ATTEMPT_COUNT];
+static uint32_t hkey_hwr[REG_KEYMGR_HKEY_HWR_COUNT];
+static uint32_t keymgr_int_enable;
+static uint32_t keymgr_int_state;
+static uint32_t keymgr_int_test;
+static uint32_t tm_pw_unlock;
+static uint32_t hwr_vld;
+static uint32_t hwr_lock;
+static uint32_t flash_rcv_wipe;
+static uint32_t hkey_err_ctrl;
+static uint32_t hkey_flash_rcv_status;
+static uint32_t hkey_testmode_unlocked_status;
 static uint32_t sha_msglen_lo;
 static uint32_t sha_msglen_hi;
 static uint64_t sha_msglen;
@@ -626,6 +638,37 @@ static uint64_t KEYMGR_Read(Component *self, uint64_t offset, unsigned size) {
     return hkey_fwr[index];
   }
 
+  index = hkey_index(offset, REG_KEYMGR_TM_PW_ATTEMPT0_OFFSET, REG_KEYMGR_TM_PW_ATTEMPT_COUNT);
+  if (index >= 0) return tm_pw_attempt[index];
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_HWR0_OFFSET, REG_KEYMGR_HKEY_HWR_COUNT);
+  if (index >= 0) return hkey_hwr[index];
+
+  switch (offset) {
+    case REG_KEYMGR_INT_ENABLE_OFFSET:
+      return keymgr_int_enable;
+    case REG_KEYMGR_INT_STATE_OFFSET:
+      return keymgr_int_state;
+    case REG_KEYMGR_INT_TEST_OFFSET:
+      return keymgr_int_test;
+    case REG_KEYMGR_TM_PW_UNLOCK_OFFSET:
+      return tm_pw_unlock;
+    case REG_KEYMGR_HWR_VLD_OFFSET:
+      return hwr_vld;
+    case REG_KEYMGR_HWR_LOCK_OFFSET:
+      return hwr_lock;
+    case REG_KEYMGR_FLASH_RCV_WIPE_OFFSET:
+      return flash_rcv_wipe;
+    case REG_KEYMGR_HKEY_ERR_CTRL_OFFSET:
+      return hkey_err_ctrl;
+    case REG_KEYMGR_HKEY_FLASH_RCV_STATUS_OFFSET:
+      return hkey_flash_rcv_status;
+    case REG_KEYMGR_HKEY_TESTMODE_UNLOCKED_STATUS_OFFSET:
+      return hkey_testmode_unlocked_status;
+    default:
+      break;
+  }
+
   index = hkey_index(offset, REG_KEYMGR_HKEY_FRR0_OFFSET, REG_KEYMGR_HKEY_FRR_COUNT);
   if (index >= 0) {
     LOG_VBS("KEYMGR: read HKEY_FRR%d (size=%u) -> 0x%08x\n", index, size, hkey_frr[index]);
@@ -705,6 +748,53 @@ static void KEYMGR_Write(Component *self, uint64_t offset, unsigned size, uint64
     hkey_fwr[index] = (uint32_t)value;
     LOG_VBS("KEYMGR: wrote HKEY_FWR%d (size=%u) <- 0x%08x\n", index, size, hkey_fwr[index]);
     return;
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_TM_PW_ATTEMPT0_OFFSET, REG_KEYMGR_TM_PW_ATTEMPT_COUNT);
+  if (index >= 0) {
+    tm_pw_attempt[index] = (uint32_t)value;
+    return;
+  }
+
+  index = hkey_index(offset, REG_KEYMGR_HKEY_HWR0_OFFSET, REG_KEYMGR_HKEY_HWR_COUNT);
+  if (index >= 0) {
+    hkey_hwr[index] = (uint32_t)value;
+    return;
+  }
+
+  switch (offset) {
+    case REG_KEYMGR_INT_ENABLE_OFFSET:
+      keymgr_int_enable = (uint32_t)value;
+      return;
+    case REG_KEYMGR_INT_STATE_OFFSET:
+      keymgr_int_state &= ~(uint32_t)value;
+      return;
+    case REG_KEYMGR_INT_TEST_OFFSET:
+      keymgr_int_test = (uint32_t)value;
+      return;
+    case REG_KEYMGR_TM_PW_UNLOCK_OFFSET:
+      tm_pw_unlock = (uint32_t)value;
+      return;
+    case REG_KEYMGR_HWR_VLD_OFFSET:
+      hwr_vld = (uint32_t)value;
+      return;
+    case REG_KEYMGR_HWR_LOCK_OFFSET:
+      hwr_lock = (uint32_t)value;
+      return;
+    case REG_KEYMGR_FLASH_RCV_WIPE_OFFSET:
+      flash_rcv_wipe = (uint32_t)value;
+      return;
+    case REG_KEYMGR_HKEY_ERR_CTRL_OFFSET:
+      hkey_err_ctrl = (uint32_t)value;
+      return;
+    case REG_KEYMGR_HKEY_FLASH_RCV_STATUS_OFFSET:
+      hkey_flash_rcv_status = (uint32_t)value;
+      return;
+    case REG_KEYMGR_HKEY_TESTMODE_UNLOCKED_STATUS_OFFSET:
+      hkey_testmode_unlocked_status = (uint32_t)value;
+      return;
+    default:
+      break;
   }
 
   index = hkey_index(offset, REG_KEYMGR_HKEY_FRR0_OFFSET, REG_KEYMGR_HKEY_FRR_COUNT);
@@ -812,6 +902,18 @@ Component *KEYMGR_Initialize(void) {
   memset(hkey_rwr, 0, sizeof(hkey_rwr));
   memset(hkey_fwr, 0, sizeof(hkey_fwr));
   memset(hkey_frr, 0, sizeof(hkey_frr));
+  memset(tm_pw_attempt, 0, sizeof(tm_pw_attempt));
+  memset(hkey_hwr, 0, sizeof(hkey_hwr));
+  keymgr_int_enable = 0;
+  keymgr_int_state = 0;
+  keymgr_int_test = 0;
+  tm_pw_unlock = 0;
+  hwr_vld = 0;
+  hwr_lock = 0;
+  flash_rcv_wipe = 0;
+  hkey_err_ctrl = 0;
+  hkey_flash_rcv_status = 0;
+  hkey_testmode_unlocked_status = 0;
   memset(sha_sts_h, 0, sizeof(sha_sts_h));
   memset(sha_key_w, 0, sizeof(sha_key_w));
 

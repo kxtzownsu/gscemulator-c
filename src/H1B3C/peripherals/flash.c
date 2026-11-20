@@ -52,6 +52,17 @@ static uint32_t prog_smart_algo;
 static uint32_t erase_smart_algo;
 static uint32_t bulkerase_smart_algo;
 static uint32_t wr_data[REG_FLASH_WR_DATA_COUNT];
+static uint32_t enable_info0_shadow_read;
+static uint32_t fsh_ictrl;
+static uint32_t fsh_istate;
+static uint32_t ovrd0_unlock;
+static uint32_t ovrd1_unlock;
+static uint32_t ovrd_sigval_din;
+static uint32_t ovrd_sigval_offset;
+static uint32_t ovrd_sigval;
+static uint32_t ovrd_sigen;
+static uint32_t no_wait_on_bout_seq;
+static uint32_t ovrd_sigval_tc1;
 
 static uint64_t flash_now_ns(void) {
   struct timespec ts;
@@ -260,6 +271,28 @@ static uint64_t FLASH_Read(Component *self, uint64_t offset, unsigned size) {
       return dout_val[0];
     case REG_FLASH_DOUT_VAL1_OFFSET:
       return dout_val[1];
+    case REG_FLASH_FSH_ENABLE_INFO0_SHADOW_READ_OFFSET:
+      return enable_info0_shadow_read;
+    case REG_FLASH_FSH_ICTRL_OFFSET:
+      return fsh_ictrl;
+    case REG_FLASH_FSH_ISTATE_OFFSET:
+      return fsh_istate;
+    case REG_FLASH_FSH_OVRD0_UNLOCK_OFFSET:
+      return ovrd0_unlock;
+    case REG_FLASH_FSH_OVRD1_UNLOCK_OFFSET:
+      return ovrd1_unlock;
+    case REG_FLASH_FSH_OVRD_SIGVAL_DIN_OFFSET:
+      return ovrd_sigval_din;
+    case REG_FLASH_FSH_OVRD_SIGVAL_OFFSET_OFFSET:
+      return ovrd_sigval_offset;
+    case REG_FLASH_FSH_OVRD_SIGVAL_OFFSET:
+      return ovrd_sigval;
+    case REG_FLASH_FSH_OVRD_SIGEN_OFFSET:
+      return ovrd_sigen;
+    case REG_FLASH_FSH_NO_WAIT_ON_BOUT_SEQ_OFFSET:
+      return no_wait_on_bout_seq;
+    case REG_FLASH_FSH_OVRD_SIGVAL_TC1_OFFSET:
+      return ovrd_sigval_tc1;
     case REG_FLASH_PE_EN_OFFSET:
       return pe_en;
     case REG_FLASH_ERROR_OFFSET:
@@ -311,6 +344,39 @@ static void FLASH_Write(Component *self, uint64_t offset, unsigned size, uint64_
     case REG_FLASH_DOUT_VAL1_OFFSET:
       LOG_VBS("FLASH: ignored write to DOUT_VAL\n");
       return;
+    case REG_FLASH_FSH_ENABLE_INFO0_SHADOW_READ_OFFSET:
+      enable_info0_shadow_read = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_ICTRL_OFFSET:
+      fsh_ictrl = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_ISTATE_OFFSET:
+      fsh_istate &= ~(uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD0_UNLOCK_OFFSET:
+      ovrd0_unlock = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD1_UNLOCK_OFFSET:
+      ovrd1_unlock = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD_SIGVAL_DIN_OFFSET:
+      ovrd_sigval_din = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD_SIGVAL_OFFSET_OFFSET:
+      ovrd_sigval_offset = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD_SIGVAL_OFFSET:
+      ovrd_sigval = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD_SIGEN_OFFSET:
+      ovrd_sigen = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_NO_WAIT_ON_BOUT_SEQ_OFFSET:
+      no_wait_on_bout_seq = (uint32_t)value;
+      return;
+    case REG_FLASH_FSH_OVRD_SIGVAL_TC1_OFFSET:
+      ovrd_sigval_tc1 = (uint32_t)value;
+      return;
     case REG_FLASH_PE_EN_OFFSET:
       pe_en = (uint32_t)value;
       return;
@@ -338,6 +404,17 @@ Component *FLASH_Initialize(void) {
   prog_smart_algo = 1;
   erase_smart_algo = 1;
   bulkerase_smart_algo = 1;
+  enable_info0_shadow_read = 0;
+  fsh_ictrl = 0;
+  fsh_istate = 0;
+  ovrd0_unlock = 0;
+  ovrd1_unlock = 0;
+  ovrd_sigval_din = 0;
+  ovrd_sigval_offset = 0;
+  ovrd_sigval = 0;
+  ovrd_sigen = 0;
+  no_wait_on_bout_seq = 0;
+  ovrd_sigval_tc1 = 0;
 
   for (unsigned i = 0; i < REG_FLASH_WR_DATA_COUNT; i++) wr_data[i] = 0;
 

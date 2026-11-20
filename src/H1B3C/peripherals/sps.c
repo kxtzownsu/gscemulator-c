@@ -301,6 +301,12 @@ static uint64_t sps_read_val(const SpsState *sps) {
   return value;
 }
 
+#define SPS_EEPROM_WORDS \
+  ((REG_SPS_EEPROM_INT_TEST_OFFSET - REG_SPS_EEPROM_CTRL_OFFSET) / 4 + 1)
+
+static uint32_t sps_eeprom_regs[SPS_EEPROM_WORDS];
+static uint32_t sps_rom_cmd;
+
 static uint64_t SPS_Read(Component *self, uint64_t offset, unsigned size) {
   SpsState *sps = self->state;
   const BasicRegister *reg;
@@ -363,6 +369,12 @@ static uint64_t SPS_Read(Component *self, uint64_t offset, unsigned size) {
     default:
       break;
   }
+
+  if (offset >= REG_SPS_EEPROM_CTRL_OFFSET && offset <= REG_SPS_EEPROM_INT_TEST_OFFSET) {
+    return sps_eeprom_regs[(offset - REG_SPS_EEPROM_CTRL_OFFSET) / 4];
+  }
+
+  if (offset == REG_SPS_ROM_CMD_OFFSET) return sps_rom_cmd;
 
   reg = basic_register_find(sps_registers, ARRAY_LEN(sps_registers), offset);
   if (reg != NULL) {
@@ -457,6 +469,22 @@ static void SPS_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
       return;
     default:
       break;
+  }
+
+  if (offset >= REG_SPS_EEPROM_CTRL_OFFSET && offset <= REG_SPS_EEPROM_INT_TEST_OFFSET) {
+    uint32_t index = (uint32_t)((offset - REG_SPS_EEPROM_CTRL_OFFSET) / 4);
+
+    if (offset == REG_SPS_EEPROM_INT_STATE_OFFSET) {
+      sps_eeprom_regs[index] &= ~(uint32_t)value;
+    } else {
+      sps_eeprom_regs[index] = (uint32_t)value;
+    }
+    return;
+  }
+
+  if (offset == REG_SPS_ROM_CMD_OFFSET) {
+    sps_rom_cmd = (uint32_t)value;
+    return;
   }
 
   reg = basic_register_find(sps_registers, ARRAY_LEN(sps_registers), offset);
@@ -580,6 +608,8 @@ Component *SPS_Initialize(void) {
   ovrd = 0;
   itcr = 0;
   itop = 0;
+  memset(sps_eeprom_regs, 0, sizeof(sps_eeprom_regs));
+  sps_rom_cmd = 0;
 
   return component_register_threaded("SPS", &sps_state, SPS_Read, SPS_Write);
 }
