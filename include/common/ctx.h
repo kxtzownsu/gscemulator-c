@@ -31,6 +31,7 @@ typedef struct {
   char flash_dir[MAX_FILE_PATH];
   bool persist_flash;
   bool verbose;
+  int console_mode;
 } Ctx;
 
 extern Ctx ctx;

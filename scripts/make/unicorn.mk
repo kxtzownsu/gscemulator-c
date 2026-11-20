@@ -5,7 +5,7 @@ $(UNICORN_STATIC_LIB): | $(UNICORN_BUILD_DIR)
 	-$(Q)$(GIT) clone $(UNICORN_REPO_URL) $(UNICORN_DIR)
 	$(Q)cd $(UNICORN_DIR) && $(GIT) pull
 	@echo "  CMAKE     unicorn"
-	$(Q)cd $(UNICORN_BUILD_DIR) && $(CMAKE) $(UNICORN_DIR) -DCMAKE_TYPE_RELEASE=Release -DBUILD_SHARED_LIBS=false
+	$(Q)cd $(UNICORN_BUILD_DIR) && $(CMAKE) $(UNICORN_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=false
 	@echo "  MAKE      unicorn"
 	$(Q)$(MAKE) -C $(UNICORN_BUILD_DIR)
 

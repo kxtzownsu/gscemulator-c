@@ -139,6 +139,8 @@ int main(int argc, char **argv) {
     emu_exit(RC_ARG_CHIP_INVALID);
   }
 
+  ctx.console_mode = (int)console_mode;
+
   get_chipemu(ctx.chip);
 
   ctx.chipemu.initialize();

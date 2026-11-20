@@ -1,3 +1,5 @@
+STATIC ?= 1
+
 ifeq ($(STATIC),1)
 UNICORN_CFLAGS := -I$(UNICORN_STATIC_HDRS)
 UNICORN_LIBS := $(UNICORN_STATIC_LIB) -lpthread -lm
@@ -29,5 +31,6 @@ LDFLAGS += -fsanitize=thread
 endif
 
 ifeq ($(STATIC),1)
+CPPFLAGS += -DUNICORN_SAFE_HOOKS
 LDFLAGS += -static
 endif

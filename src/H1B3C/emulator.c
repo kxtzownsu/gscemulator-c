@@ -8,6 +8,12 @@
 
 #include <string.h>
 
+#ifdef UNICORN_SAFE_HOOKS
+#include <pthread.h>
+#include <stdatomic.h>
+#include <time.h>
+#endif
+
 #include <unicorn/unicorn.h>
 #include <inttypes.h>
 
@@ -180,34 +186,15 @@ static void handle_exc_return(uc_engine *uc) {
   }
 }
 
-static void wfi_skip_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
-  uint16_t insn;
-  uint32_t next;
 
-  (void)size;
-  (void)user_data;
+#define M3_SLICE_INSTRUCTIONS 10000u
 
-  if (uc_mem_read(uc, address, &insn, sizeof(insn)) != UC_ERR_OK) return;
-  if (insn != 0xBF30u) return;
-
-  next = ((uint32_t)address + 2) | 1u;
-  (void)uc_reg_write(uc, UC_ARM_REG_PC, &next);
-}
-
-static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+static void m3_poll(uc_engine *uc) {
   static uint64_t poll_count;
   uint32_t ipsr = 0;
   uint32_t primask = 0;
   uint32_t faultmask = 0;
   int exc;
-
-  (void)address;
-  (void)size;
-  (void)user_data;
-
-  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
-  (void)uc_reg_read(uc, UC_ARM_REG_PRIMASK, &primask);
-  (void)uc_reg_read(uc, UC_ARM_REG_FAULTMASK, &faultmask);
 
   TIMELS_Poll();
   GLOBALSEC_Poll();
@@ -215,6 +202,12 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
   TIMEHS_Poll();
   RMA_Poll();
   if ((++poll_count & 0x3Fu) == 0) component_poll_all();
+
+  if (!M3_IrqPending()) return;
+
+  (void)uc_reg_read(uc, UC_ARM_REG_IPSR, &ipsr);
+  (void)uc_reg_read(uc, UC_ARM_REG_PRIMASK, &primask);
+  (void)uc_reg_read(uc, UC_ARM_REG_FAULTMASK, &faultmask);
 
   exc = M3_TakeException(ipsr, primask != 0, faultmask != 0);
   if (exc <= 0) return;
@@ -224,6 +217,31 @@ static void m3_block_hook(uc_engine *uc, uint64_t address, uint32_t size, void *
   }
   enter_exception(uc, (unsigned)exc);
 }
+
+#ifdef UNICORN_SAFE_HOOKS
+static _Atomic bool m3_safe_stop;
+static _Atomic bool m3_safe_running;
+static pthread_t m3_safe_thread;
+
+static void m3_safe_hook(uc_engine *uc, void *user_data) {
+  (void)user_data;
+  m3_poll(uc);
+}
+
+static void *m3_safe_worker(void *arg) {
+  (void)arg;
+
+  while (!atomic_load(&m3_safe_stop)) {
+    struct timespec delay = { .tv_sec = 0, .tv_nsec = 1000000 };
+
+    nanosleep(&delay, NULL);
+
+    if (atomic_load(&m3_safe_running)) (void)uc_trigger_safe_hook(ctx.uc);
+  }
+
+  return NULL;
+}
+#endif
 
 static bool escalate_unicorn_error(uc_engine *uc, uc_err err) {
   unsigned kind;
@@ -296,17 +314,14 @@ void init_unicorn(void){
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
 
-  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_CODE, (void *)wfi_skip_hook, NULL, 1, 0);
+#ifdef UNICORN_SAFE_HOOKS
+  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_SAFE, (void *)m3_safe_hook, NULL, 1, 0);
   if (err != UC_ERR_OK) {
-    LOG_ERR("Failed to install WFI hook: %s\n", uc_strerror(err));
+    LOG_ERR("Failed to install safe hook: %s\n", uc_strerror(err));
     emu_exit(RC_CHIPEMU_FAILED_INIT);
   }
+#endif
 
-  err = uc_hook_add(ctx.uc, &hook, UC_HOOK_BLOCK, (void *)m3_block_hook, NULL, 1, 0);
-  if (err != UC_ERR_OK) {
-    LOG_ERR("Failed to install block hook: %s\n", uc_strerror(err));
-    emu_exit(RC_CHIPEMU_FAILED_INIT);
-  }
 }
 
 void Havn_Initialize(void) {
@@ -430,15 +445,48 @@ void Havn_StartEmulation(void) {
 
   M3_StartCycleCount();
 
+#ifdef UNICORN_SAFE_HOOKS
+  atomic_store(&m3_safe_stop, false);
+  atomic_store(&m3_safe_running, false);
+
+  if (pthread_create(&m3_safe_thread, NULL, m3_safe_worker, NULL) != 0) {
+    runtime_fault(RC_CHIPEMU_FAILED_INIT, "failed to create the safe poll thread");
+    return;
+  }
+
   for (;;) {
+    atomic_store(&m3_safe_running, true);
     err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, 0);
-    if (err == UC_ERR_OK) break;
+    atomic_store(&m3_safe_running, false);
     if (memory_fault_occurred()) break;
+    if (runtime_is_shutting_down()) break;
+    if (err != UC_ERR_OK && !escalate_unicorn_error(ctx.uc, err)) break;
+
+    if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) break;
+    pc |= 1u;
+  }
+
+  atomic_store(&m3_safe_stop, true);
+  pthread_join(m3_safe_thread, NULL);
+#else
+  for (;;) {
+    err = uc_emu_start(ctx.uc, pc, UINT32_MAX, 0, M3_SLICE_INSTRUCTIONS);
+    if (memory_fault_occurred()) break;
+    if (runtime_is_shutting_down()) break;
+
+    if (err == UC_ERR_OK) {
+      m3_poll(ctx.uc);
+      if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) break;
+      pc |= 1u;
+      continue;
+    }
+
     if (!escalate_unicorn_error(ctx.uc, err)) break;
 
     if (uc_reg_read(ctx.uc, UC_ARM_REG_PC, &pc) != UC_ERR_OK) break;
     pc |= 1u;
   }
+#endif
 
   {
     uint32_t stop_pc = 0;

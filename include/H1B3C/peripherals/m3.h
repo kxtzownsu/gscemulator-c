@@ -3,6 +3,8 @@
 
 #include <common/peripherals/component.h>
 
+#include <stdbool.h>
+
 #define REG_M3_BASE_ADDR 0xE0000000
 #define REG_M3_SYST_CSR_OFFSET 0xE010
 #define REG_M3_SYST_RVR_OFFSET 0xE014
@@ -256,5 +258,6 @@ int M3_TakeException(unsigned ipsr, int primask, int faultmask);
 int M3_ExceptionPriority(unsigned exc_num);
 unsigned M3_EscalateFault(unsigned kind, uint32_t status);
 void M3_Poll(void);
+bool M3_IrqPending(void);
 
 #endif /* H1B3C_PERIPHERALS_M3_H */

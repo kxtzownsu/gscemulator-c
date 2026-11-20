@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <common/ctx.h>
 #include <common/logger.h>
 #include <common/runtime/console.h>
 
@@ -29,6 +30,8 @@ typedef struct {
   uint8_t rx_byte;
   bool rx_buffered;
   bool console;
+  uint8_t tx_buffer[256];
+  size_t tx_len;
 } UartState;
 
 static UartState uarts[3];
@@ -64,20 +67,34 @@ static void uart_scan_rma_byte(uint8_t byte) {
   rma_scanner.length = 0;
 }
 
-static void uart_tx_byte(UartState *uart, uint8_t byte) {
-  ssize_t written;
+static void uart_tx_flush(UartState *uart) {
+  if (uart->tx_len == 0) return;
 
+  {
+    ssize_t written = write(STDOUT_FILENO, uart->tx_buffer, uart->tx_len);
+
+    (void)written;
+  }
+  uart->tx_len = 0;
+}
+
+static void uart_tx_byte(UartState *uart, uint8_t byte) {
   if (!uart->console) return;
 
   uart_scan_rma_byte(byte);
 
-  if (console_active() && console_uart_write(&byte, 1) == 1) {
-    M3_PendIrq(uart->tx_irq);
+  if (console_active()) {
+    if (console_uart_write(&byte, 1) == 1) {
+      M3_PendIrq(uart->tx_irq);
+    }
     return;
   }
 
-  written = write(STDOUT_FILENO, &byte, 1);
-  (void)written;
+  uart->tx_buffer[uart->tx_len++] = byte;
+  if (uart->tx_len == sizeof(uart->tx_buffer) || byte == '\n' || byte == '\r') {
+    uart_tx_flush(uart);
+  }
+
   M3_PendIrq(uart->tx_irq);
 }
 
@@ -257,13 +274,20 @@ Component *UART_Initialize(unsigned index) {
 
   name = index == 0 ? "UART0" : index == 1 ? "UART1" : "UART2";
   memset(&uarts[index], 0, sizeof(uarts[index]));
+  uarts[index].tx_len = 0;
   uarts[index].state = 1;
   uarts[index].console = index == 0;
   uarts[index].tx_irq = index == 0 ? 177u : index == 1 ? 184u : 191u;
   uarts[index].rx_irq = index == 0 ? 174u : index == 1 ? 181u : 188u;
 
   if (index == 0) {
-    Component *component = component_register_threaded(name, &uarts[index], UART_Read, UART_Write);
+    Component *component;
+
+    if (ctx.console_mode != CONSOLE_NONE) {
+      component = component_register_threaded(name, &uarts[index], UART_Read, UART_Write);
+    } else {
+      component = component_register(name, &uarts[index], UART_Read, UART_Write);
+    }
 
     if (component != NULL) component_set_poll(component, UART_Poll);
     return component;

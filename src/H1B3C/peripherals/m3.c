@@ -9,6 +9,7 @@
 #include <string.h>
 #include <time.h>
 
+#include <common/ctx.h>
 #include <common/logger.h>
 #include <common/peripherals/define.h>
 #include <common/runtime/control.h>
@@ -199,6 +200,21 @@ void M3_Poll(void) {
   syst_csr |= M3_SYST_CSR_COUNTFLAG;
   if ((syst_csr & 2u) != 0) M3_PendSysException(15);
   syst_pending_wraps = 0;
+}
+
+bool M3_IrqPending(void) {
+  unsigned i;
+
+  M3_Poll();
+
+  for (i = 0; i < 16; i++) {
+    if (atomic_load(&sys_pend[i]) != 0) return true;
+  }
+  for (i = 0; i < REG_M3_NVIC_ISPR_COUNT; i++) {
+    if (atomic_load(&nvic_pend[i]) != 0) return true;
+  }
+
+  return false;
 }
 
 int M3_ExceptionPriority(unsigned exc_num) {
@@ -487,6 +503,9 @@ static void M3_Write(Component *self, uint64_t offset, unsigned size, uint64_t v
       }
     } else if (offset == REG_M3_NVIC_STIR_OFFSET && value != 0) {
       M3_PendIrq((unsigned)value & 0x1FFu);
+#ifdef UNICORN_SAFE_HOOKS
+      if (ctx.uc != NULL) (void)uc_trigger_safe_hook(ctx.uc);
+#endif
     }
 
     *reg->value = (uint32_t)value;
