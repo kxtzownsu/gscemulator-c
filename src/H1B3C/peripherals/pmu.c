@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <common/logger.h>
 #include <common/peripherals/define.h>
@@ -31,6 +32,11 @@ static uint32_t long_life_scratch[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
 static bool long_life_scratch_wr_en[REG_PMU_LONG_LIFE_SCRATCH_COUNT];
 static bool int_enable;
 static uint32_t rstsrc;
+static uint32_t pmu_flat[REG_PMU_LOW_BLOCK_COUNT];
+static uint32_t pmu_int_state;
+static uint32_t pmu_int_test;
+static uint32_t antest_top_ctrl;
+static uint32_t antest_regdig;
 
 static int pwrdn_scratch_index(uint64_t offset) {
   uint64_t end = (uint64_t)REG_PMU_PWRDN_SCRATCH_OFFSET +
@@ -180,9 +186,17 @@ static uint64_t PMU_Read(Component *self, uint64_t offset, unsigned size) {
       LOG_VBS("PMU: read PERICLKCLR1 (size=%u) -> 0x%08x\n", size, value);
       return value;
     default:
-      component_log_unhandled(self, "read", offset);
-      return 0;
+      break;
   }
+
+  if (offset < (uint64_t)REG_PMU_LOW_BLOCK_COUNT * 4u) return pmu_flat[offset / 4u];
+  if (offset == REG_PMU_INT_STATE_OFFSET) return pmu_int_state;
+  if (offset == REG_PMU_INT_TEST_OFFSET) return pmu_int_test;
+  if (offset == REG_PMU_ANTEST_TOP_CTRL_OFFSET) return antest_top_ctrl;
+  if (offset == REG_PMU_ANTEST_REGDIG_OFFSET) return antest_regdig;
+
+  component_log_unhandled(self, "read", offset);
+  return 0;
 }
 
 static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
@@ -297,8 +311,31 @@ static void PMU_Write(Component *self, uint64_t offset, unsigned size, uint64_t 
       LOG_VBS("PMU: wrote PERICLKCLR1 (size=%u) <- 0x%08x\n", size, (uint32_t)value);
       return;
     default:
-      component_log_unhandled(self, "write", offset);
+      break;
   }
+
+  if (offset < (uint64_t)REG_PMU_LOW_BLOCK_COUNT * 4u) {
+    pmu_flat[offset / 4u] = (uint32_t)value;
+    return;
+  }
+  if (offset == REG_PMU_INT_STATE_OFFSET) {
+    pmu_int_state &= ~(uint32_t)value;
+    return;
+  }
+  if (offset == REG_PMU_INT_TEST_OFFSET) {
+    pmu_int_test = (uint32_t)value;
+    return;
+  }
+  if (offset == REG_PMU_ANTEST_TOP_CTRL_OFFSET) {
+    antest_top_ctrl = (uint32_t)value;
+    return;
+  }
+  if (offset == REG_PMU_ANTEST_REGDIG_OFFSET) {
+    antest_regdig = (uint32_t)value;
+    return;
+  }
+
+  component_log_unhandled(self, "write", offset);
 }
 
 Component *PMU_Initialize(void) {
@@ -317,6 +354,11 @@ Component *PMU_Initialize(void) {
   exitpd_mask = 0;
   int_enable = false;
   rstsrc = 0;
+  memset(pmu_flat, 0, sizeof(pmu_flat));
+  pmu_int_state = 0;
+  pmu_int_test = 0;
+  antest_top_ctrl = 0;
+  antest_regdig = 0;
 
   return component_register("PMU", NULL, PMU_Read, PMU_Write);
 }

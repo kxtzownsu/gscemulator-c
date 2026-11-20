@@ -60,6 +60,11 @@ static const uint32_t dummykey_offsets[DUMMYKEY_COUNT] = {
 };
 
 static uint32_t sb_bl_sig[REG_GLOBALSEC_SB_BL_SIG_COUNT];
+#define GLOBALSEC_FLAT_OFFSET REG_GLOBALSEC_CPU0_D_ERROR_HISTORY_OFFSET
+#define GLOBALSEC_FLAT_COUNT \
+  ((REG_GLOBALSEC_VERSION_OFFSET - GLOBALSEC_FLAT_OFFSET) / 4 + 1)
+static uint32_t globalsec_flat[GLOBALSEC_FLAT_COUNT];
+static uint32_t int_err_flags;
 static uint32_t permission_runlevel[REG_GLOBALSEC_PERMISSION_COUNT];
 static bool sb_comp_status;
 static uint32_t hide_rom;
@@ -314,9 +319,18 @@ static uint64_t GLOBALSEC_Read(Component *self, uint64_t offset, unsigned size) 
       LOG_VBS("GLOBALSEC: read HIDE_ROM (size=%u) -> 0x%08x\n", size, hide_rom);
       return hide_rom;
     default:
-      component_log_unhandled(self, "read", offset);
-      return 0;
+      break;
   }
+
+  if (offset == REG_GLOBALSEC_INT_ERR_FLAGS_OFFSET) return int_err_flags;
+  if (offset == REG_GLOBALSEC_VERSION_OFFSET) return 0x59010913;
+  if (offset >= GLOBALSEC_FLAT_OFFSET &&
+      offset < GLOBALSEC_FLAT_OFFSET + GLOBALSEC_FLAT_COUNT * 4u) {
+    return globalsec_flat[(offset - GLOBALSEC_FLAT_OFFSET) / 4u];
+  }
+
+  component_log_unhandled(self, "read", offset);
+  return 0;
 }
 
 static void GLOBALSEC_Write(Component *self, uint64_t offset, unsigned size, uint64_t value) {
@@ -455,6 +469,20 @@ static void GLOBALSEC_Write(Component *self, uint64_t offset, unsigned size, uin
       LOG_VBS("GLOBALSEC: wrote HIDE_ROM (size=%u) <- 0x%08x\n", size, hide_rom);
       return;
     default:
+      if (offset == REG_GLOBALSEC_INT_ERR_FLAGS_OFFSET) {
+        int_err_flags &= ~(uint32_t)value;
+        return;
+      }
+      if (offset == REG_GLOBALSEC_VERSION_OFFSET) {
+        LOG_VBS("GLOBALSEC: ignored write to VERSION\n");
+        return;
+      }
+      if (offset >= GLOBALSEC_FLAT_OFFSET &&
+          offset < GLOBALSEC_FLAT_OFFSET + GLOBALSEC_FLAT_COUNT * 4u) {
+        globalsec_flat[(offset - GLOBALSEC_FLAT_OFFSET) / 4u] = (uint32_t)value;
+        return;
+      }
+
       component_log_unhandled(self, "write", offset);
       return;
   }
@@ -569,6 +597,8 @@ Component *GLOBALSEC_Initialize(void) {
   memset(region_regs, 0, sizeof(region_regs));
   memset(dummykey, 0, sizeof(dummykey));
   memset(sb_bl_sig, 0, sizeof(sb_bl_sig));
+  memset(globalsec_flat, 0, sizeof(globalsec_flat));
+  int_err_flags = 0;
   for (i = 0; i < REG_GLOBALSEC_PERMISSION_COUNT; i++) {
     permission_runlevel[i] = GLOBALSEC_PERMISSION_HIGHEST;
   }
