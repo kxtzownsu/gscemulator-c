@@ -4,5 +4,7 @@ flash/
 include/common/bundled-firmware.h
 include/common/version.h
 reference/
+tools/rescue/rescue
+tools/spiflash/spiflash
 
 third_party/unicorn

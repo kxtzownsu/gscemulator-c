@@ -18,6 +18,14 @@ include scripts/make/clean.mk
 
 .DELETE_ON_ERROR:
 
-.PHONY: all clean fullclean run fuzz tsan
+.PHONY: all clean fullclean run fuzz tsan tools tools-clean
 
 -include $(DEPS)
+
+tools:
+	@echo "  TOOLS     tools/"
+	$(Q)$(MAKE) -C tools
+
+tools-clean:
+	@echo "  CLEAN     tools/"
+	$(Q)$(MAKE) -C tools clean

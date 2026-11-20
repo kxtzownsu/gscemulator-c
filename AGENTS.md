@@ -15,6 +15,8 @@ make fuzz                    # clang/libFuzzer + ASan/UBSan, 60s default
 make fuzz FUZZ_TIME=300      # longer run
 make fuzz FUZZ_TIME=0        # run until interrupted
 make fuzz FUZZ_ARGS='-runs=1000000'
+make tools                   # build tools/rescue and tools/spiflash
+make tools-clean             # remove the tool binaries
 ```
 
 `make` also regenerates `include/common/bundled-firmware.h` from one or more
@@ -67,6 +69,7 @@ With a bundled build, `-r` is optional and the binary falls back to `BUNDLED_H1B
 - `scripts/generate_version_header.sh` - generates `include/common/version.h` at build time.
 - `scripts/make/` - modular build logic (`toolchain.mk`, `variables.mk`, `setup.mk`, `firmware.mk`, `unicorn.mk`, `version.mk`, `flags.mk`, `build.mk`, `fuzz.mk`, `clean.mk`).
 - `tests/` - libFuzzer harness, dictionary, and seed corpus.
+- `tools/` - host-side `rescue` and `spiflash` packet senders with shared framing in `tools/common/shaft.c`.
 - `include/` - public headers; implementation stays in `src/`.
 - `.opencode/skills/` - repo-local skills for fuzzing, chip work, libargs, and verification.
 
@@ -242,6 +245,9 @@ make SINGLE_THREAD=1
 make tsan
 ./build/$(uname -m)/gscemu
 make fuzz FUZZ_TIME=1
+make tools
+tools/rescue/rescue --help
+tools/spiflash/spiflash --help
 ```
 
 For a bundled build, provide `src/<CHIP>/firmware/{bootrom,firmware}.bin` or the matching `BUNDLED_<CHIP>_*` overrides and run plain `make`.
