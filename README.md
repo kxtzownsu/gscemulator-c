@@ -78,7 +78,7 @@ The default build embeds the H1B3C BootROM and firmware, so no paths are needed.
 - `stdio` creates a pty, prints its slave path, and pumps stdin/stdout through it. This is the default when stdin is a TTY.
 - `pty` creates the pty and prints its slave path but does not attach stdio. Use this with `tools/` or another pty client.
 
-Wait for `Console is enabled; type HELP for help.` before typing. `SINGLE_THREAD=1` builds always use `none`.
+Wait for `Console is enabled; type HELP for help.` before typing. `SINGLE_THREAD=1` builds always use `none`. Press `Ctrl-T` to pulse the emulated power button; CCD physical presence checks want five short presses.
 
 ```bash
 ./build/$(uname -m)/gscemu --console stdio
@@ -145,6 +145,7 @@ See [tools/README.md](tools/README.md) for protocol details and options.
 
 - Old images (`r0.0.8` and `r0.0.10`) only trust the test endorsement CA and use an older crypto mask load. The emulator patches the CA modulus and the legacy microcode entry before running them, so production certs install and the endorsement completes.
 - `reboot` from the firmware console requires the CCD console to be open. Run `ccd open` first, otherwise the command prints `Access Denied`.
+- `ccd testlab enable` and `ccd unlock` use the firmware's short physical-presence check. Press `Ctrl-T` five times, about a second apart.
 - The flash image is writable by the guest. Use `--no-persist` if you do not want a boot to change the host flash files.
 - The benchmark harness lives in `reference/benchmark/` and is local-only. It builds a tiny ROM and a benchmark firmware, then compares this emulator against upstream.
 

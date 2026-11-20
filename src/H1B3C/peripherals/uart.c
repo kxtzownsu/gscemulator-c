@@ -1,5 +1,6 @@
 #include <H1B3C/peripherals/uart.h>
 #include <H1B3C/peripherals/m3.h>
+#include <H1B3C/peripherals/rbox.h>
 #include <H1B3C/rma.h>
 
 #include <stdbool.h>
@@ -10,6 +11,8 @@
 #include <common/ctx.h>
 #include <common/logger.h>
 #include <common/runtime/console.h>
+
+#define UART_POWER_BUTTON_BYTE 0x14u
 
 typedef struct {
   unsigned tx_irq;
@@ -105,6 +108,11 @@ static bool uart_rx_fill(UartState *uart) {
   if (uart->rx_buffered) return true;
   if ((uart->state & 2u) != 0) return false;
   if (console_uart_read(&byte, 1) != 1) return false;
+
+  if (byte == UART_POWER_BUTTON_BYTE) {
+    RBOX_RequestPowerButton();
+    return false;
+  }
 
   uart->rx_byte = byte;
   uart->rx_buffered = true;
